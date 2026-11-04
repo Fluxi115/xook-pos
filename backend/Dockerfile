@@ -6,5 +6,6 @@ RUN dotnet publish src/POS.Api/POS.Api.csproj -c Release -o /app/publish /p:UseA
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 COPY --from=build /app/publish .
-EXPOSE 8080
-ENTRYPOINT ["dotnet", "POS.Api.dll"]
+
+# Render inyecta PORT al arrancar; en local se usa 8080.
+ENTRYPOINT ["sh", "-c", "exec dotnet POS.Api.dll --urls http://+:${PORT:-8080}"]
