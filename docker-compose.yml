@@ -16,6 +16,7 @@ services:
       Jwt__Audience: ${JWT_AUDIENCE:-pos-gastro-web}
       Cors__Origins__0: ${CORS_ORIGIN:-http://localhost:5173}
       Cors__Origins__1: ${CORS_ORIGIN_ALT:-http://127.0.0.1:5173}
+      Cors__Origins__2: ${CORS_ORIGIN_APP:-https://localhost}
     volumes:
       - ./data:/app/data
     restart: unless-stopped

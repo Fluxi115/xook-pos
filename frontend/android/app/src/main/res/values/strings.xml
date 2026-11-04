@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Xook POS</string>
+    <string name="title_activity_main">Xook POS</string>
+    <string name="package_name">com.xookpos.app</string>
+    <string name="custom_url_scheme">com.xookpos.app</string>
+</resources>
