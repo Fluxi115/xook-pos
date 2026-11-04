@@ -11,34 +11,12 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        var connection = configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException("Falta ConnectionStrings:DefaultConnection.");
-        Directory.CreateDirectory(DirectorioSqlite(connection));
+        var connection = NpgsqlConnectionString.Resolve(configuration.GetConnectionString("DefaultConnection"));
 
-        services.AddDbContext<AppDbContext>(options => options.UseSqlite(connection));
+        services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connection));
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
         services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
         services.AddScoped<DevDataSeeder>();
         return services;
-    }
-
-    private static string DirectorioSqlite(string connection)
-    {
-        const string clave = "Data Source=";
-        var inicio = connection.IndexOf(clave, StringComparison.OrdinalIgnoreCase);
-        if (inicio < 0)
-        {
-            return Directory.GetCurrentDirectory();
-        }
-
-        var ruta = connection[(inicio + clave.Length)..].Trim().Trim('"');
-        var fin = ruta.IndexOf(';');
-        if (fin >= 0)
-        {
-            ruta = ruta[..fin];
-        }
-
-        var directorio = Path.GetDirectoryName(ruta);
-        return string.IsNullOrWhiteSpace(directorio) ? Directory.GetCurrentDirectory() : directorio;
     }
 }

@@ -9,6 +9,8 @@ public class Venta : TenantEntity
 
     public Guid? TurnoCajaId { get; set; }
 
+    public TurnoCaja? Turno { get; set; }
+
     public string FolioVenta { get; set; } = string.Empty;
 
     public DateTime FechaHora { get; set; }

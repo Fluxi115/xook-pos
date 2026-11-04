@@ -38,6 +38,8 @@ public sealed class VentaItemSyncDto
 
     public int Cantidad { get; set; }
 
+    public decimal PrecioCatalogo { get; set; }
+
     public decimal PrecioUnitario { get; set; }
 
     public decimal TotalLinea { get; set; }
@@ -72,4 +74,6 @@ public sealed class SyncVentaError
     public Guid Id { get; set; }
 
     public string Mensaje { get; set; } = string.Empty;
+
+    public bool Definitivo { get; set; } = true;
 }

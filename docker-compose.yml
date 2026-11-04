@@ -10,14 +10,12 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_HTTP_PORTS: "8080"
-      ConnectionStrings__DefaultConnection: Data Source=/app/data/pos.db
+      DATABASE_URL: ${DATABASE_URL:?Define DATABASE_URL con la cadena de Supabase}
       Jwt__Key: ${JWT_KEY:?Define JWT_KEY en el archivo .env}
       Jwt__Issuer: ${JWT_ISSUER:-pos-gastro}
       Jwt__Audience: ${JWT_AUDIENCE:-pos-gastro-web}
       Cors__Origins__0: ${CORS_ORIGIN:-http://localhost:5173}
       Cors__Origins__1: ${CORS_ORIGIN_ALT:-http://127.0.0.1:5173}
       Cors__Origins__2: ${CORS_ORIGIN_APP:-https://localhost}
-    volumes:
-      - ./data:/app/data
     restart: unless-stopped
 

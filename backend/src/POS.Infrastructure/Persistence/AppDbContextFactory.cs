@@ -8,11 +8,13 @@ public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
 {
     public AppDbContext CreateDbContext(string[] args)
     {
-        var connection = Environment.GetEnvironmentVariable("POS_CONNECTION")
-            ?? "Data Source=pos.db";
+        var connection = NpgsqlConnectionString.Normalize(
+            Environment.GetEnvironmentVariable("DATABASE_URL")
+            ?? Environment.GetEnvironmentVariable("POS_CONNECTION")
+            ?? "Host=localhost;Port=5432;Database=xookpos;Username=postgres;Password=postgres;SSL Mode=Disable");
 
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite(connection)
+            .UseNpgsql(connection)
             .Options;
 
         return new AppDbContext(options, new DesignTimeTenant());
