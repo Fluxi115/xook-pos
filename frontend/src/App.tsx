@@ -1,0 +1,56 @@
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { Toaster } from 'sonner';
+import { AdminPage } from './features/admin/AdminPage';
+import { AuthProvider, useAuth } from './features/auth/sesion';
+import { Login } from './features/auth/Login';
+import { PosView } from './features/pos/PosView';
+import { SuperAdminPage } from './features/superadmin/SuperAdminPage';
+
+function rutaDeRol(rol: string) {
+  if (rol === 'SuperAdmin') return '/superadmin';
+  if (rol === 'AdminSucursal') return '/admin';
+  return '/caja';
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <Toaster position="top-center" theme="dark" richColors />
+        <Routes>
+          <Route path="/" element={<RutaInicio />} />
+          <Route path="/caja" element={<RutaCaja />} />
+          <Route path="/admin" element={<RutaAdmin />} />
+          <Route path="/superadmin" element={<RutaSuperAdmin />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}
+
+function RutaInicio() {
+  const { sesion, setSesion } = useAuth();
+  if (!sesion) return <Login onSesion={setSesion} />;
+  return <Navigate to={rutaDeRol(sesion.rol)} replace />;
+}
+
+function RutaCaja() {
+  const { sesion, setSesion, enLinea } = useAuth();
+  if (!sesion) return <Navigate to="/" replace />;
+  return <PosView sesion={sesion} enLinea={enLinea} onCerrarSesion={() => setSesion(null)} />;
+}
+
+function RutaSuperAdmin() {
+  const { sesion, setSesion } = useAuth();
+  if (!sesion) return <Navigate to="/" replace />;
+  if (sesion.rol !== 'SuperAdmin') return <Navigate to={rutaDeRol(sesion.rol)} replace />;
+  return <SuperAdminPage onCerrarSesion={() => setSesion(null)} />;
+}
+
+function RutaAdmin() {
+  const { sesion, setSesion } = useAuth();
+  if (!sesion) return <Navigate to="/" replace />;
+  if (sesion.rol !== 'AdminSucursal' && sesion.rol !== 'SuperAdmin') return <Navigate to="/caja" replace />;
+  return <AdminPage onCerrarSesion={() => setSesion(null)} />;
+}
