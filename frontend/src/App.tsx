@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AdminPage } from './features/admin/AdminPage';
 import { AuthProvider, useAuth } from './features/auth/sesion';
 import { Login } from './features/auth/Login';
+import { PantallaCarga } from './features/auth/PantallaCarga';
 import { PosView } from './features/pos/PosView';
 import { SuperAdminPage } from './features/superadmin/SuperAdminPage';
 
@@ -13,6 +15,15 @@ function rutaDeRol(rol: string) {
 }
 
 export default function App() {
+  const [presentando, setPresentando] = useState(true);
+
+  useEffect(() => {
+    const espera = window.setTimeout(() => setPresentando(false), 1700);
+    return () => window.clearTimeout(espera);
+  }, []);
+
+  if (presentando) return <PantallaCarga />;
+
   return (
     <BrowserRouter>
       <AuthProvider>

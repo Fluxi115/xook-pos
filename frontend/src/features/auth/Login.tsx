@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { ApiError, type Sesion } from '../../services/apiClient';
-import { MARCA } from '../../marca';
 import { iniciarSesion } from '../../services/syncService';
+import { PantallaCarga } from './PantallaCarga';
+import baner from '../../../../assets/XookPos_ban.png';
+import icono from '../../../../assets/XookPos_icon.png';
 
 const MENSAJE_SUSCRIPCION =
   'Tu suscripción ha vencido. Ponte en contacto con el administrador para reactivar tu cuenta.';
@@ -40,11 +42,15 @@ export function Login({ onSesion }: LoginProps) {
     }
   }
 
+  if (cargando) return <PantallaCarga mensaje="Entrando" />;
+
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md items-center px-4 py-8">
-      <form onSubmit={enviar} className="w-full rounded-3xl border border-line bg-panel p-6 shadow-2xl sm:p-8">
-        <p className="text-sm font-semibold tracking-[0.18em] text-amber">{MARCA}</p>
-        <h1 className="mt-2 text-3xl font-semibold">Entrar</h1>
+    <main className="grid min-h-dvh lg:grid-cols-2">
+      <img src={baner} alt="Xook POS, vende, controla y crece" className="h-52 w-full object-cover sm:h-72 lg:h-dvh" />
+      <div className="flex items-center justify-center px-4 py-8">
+      <form onSubmit={enviar} className="w-full max-w-md rounded-3xl border border-line bg-panel p-6 shadow-2xl sm:p-8">
+        <img src={icono} alt="Xook POS" className="mx-auto h-20 w-auto" />
+        <h1 className="mt-4 text-center text-3xl font-semibold">Entrar</h1>
 
         {suscripcionVencida && (
           <div role="alert" className="mt-6 rounded-2xl border-2 border-chili bg-chili/15 p-4">
@@ -89,9 +95,10 @@ export function Login({ onSesion }: LoginProps) {
           disabled={cargando}
           className="mt-6 min-h-14 w-full rounded-2xl bg-amber text-lg font-semibold text-ink active:scale-[0.99] disabled:opacity-60"
         >
-          {cargando ? 'Entrando…' : 'Entrar'}
+          Entrar
         </button>
       </form>
+      </div>
     </main>
   );
 }
