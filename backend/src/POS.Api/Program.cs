@@ -97,14 +97,15 @@ builder.Services.AddCors(options => options.AddPolicy("Frontend", policy =>
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+app.UseSwagger();
+app.UseSwaggerUI(options =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "Xook POS v1");
+    options.RoutePrefix = "swagger";
+});
 
-// Las migraciones automáticas y el seeder solo se ejecutan en entorno local (Development)
-// Para producción, aplícalas manualmente por CLI mediante el Transaction Pooler.
+// El esquema y los datos de prueba se aplican al arrancar solo en Development.
+// En Production la base ya está registrada; el esquema se aplica con los scripts de Supabase.
 if (app.Environment.IsDevelopment())
 {
     await using (var scope = app.Services.CreateAsyncScope())

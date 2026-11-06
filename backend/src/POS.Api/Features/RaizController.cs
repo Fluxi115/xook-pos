@@ -8,6 +8,7 @@ namespace POS.Api.Features;
 public sealed class RaizController : ControllerBase
 {
     [HttpGet("/")]
+    [HttpGet("/api/v1")]
     public IActionResult Inicio()
     {
         return Ok(new
