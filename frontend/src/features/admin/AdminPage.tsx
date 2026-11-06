@@ -177,7 +177,9 @@ export function AdminPage({ onCerrarSesion }: AdminPageProps) {
             onCambio={cargar}
           />
         )}
-        {!cargando && !error && seccion === 'personal' && <Personal equipo={personal} onNuevo={() => setAltaUsuario(true)} />}
+        {!cargando && !error && seccion === 'personal' && metricas && (
+          <Personal equipo={personal} maxCajas={metricas.maxCajas} maxMeseros={metricas.maxMeseros} onNuevo={() => setAltaUsuario(true)} />
+        )}
         {!cargando && !error && seccion === 'cortes' && <Cortes cortes={cortes} />}
       </main>
 
@@ -383,11 +385,28 @@ function Cortes({ cortes }: { cortes: CorteCaja[] }) {
   );
 }
 
-function Personal({ equipo, onNuevo }: { equipo: UsuarioSucursal[]; onNuevo: () => void }) {
+function Personal({
+  equipo,
+  maxCajas,
+  maxMeseros,
+  onNuevo,
+}: {
+  equipo: UsuarioSucursal[];
+  maxCajas: number;
+  maxMeseros: number;
+  onNuevo: () => void;
+}) {
+  const cajas = equipo.filter((persona) => persona.rol === 'Cajero').length;
+  const meseros = equipo.filter((persona) => persona.rol === 'Mesero').length;
   return (
     <section>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-2xl font-semibold">Personal</h2>
+        <div>
+          <h2 className="text-2xl font-semibold">Personal</h2>
+          <p className="mt-1 text-sm text-muted">
+            Cajas {cajas} de {maxCajas}. Meseros {meseros} de {maxMeseros}.
+          </p>
+        </div>
         <button type="button" className="min-h-11 rounded-2xl bg-amber px-4 font-semibold text-ink" onClick={onNuevo}>
           Crear usuario
         </button>

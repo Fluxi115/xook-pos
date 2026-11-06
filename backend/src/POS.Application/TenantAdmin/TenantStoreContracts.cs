@@ -22,6 +22,10 @@ public sealed class DashboardDto
 
     public decimal Mixto { get; set; }
 
+    public int MaxCajas { get; set; }
+
+    public int MaxMeseros { get; set; }
+
     public List<VentaResumenDto> UltimasVentas { get; set; } = [];
 }
 

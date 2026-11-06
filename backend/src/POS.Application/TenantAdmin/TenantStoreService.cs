@@ -31,7 +31,7 @@ public sealed class TenantStoreService
         var sucursal = await _db.Tenants
             .AsNoTracking()
             .Where(t => t.Id == _tenant.TenantId)
-            .Select(t => new { t.NombreComercial, t.LogoUrl })
+            .Select(t => new { t.NombreComercial, t.LogoUrl, t.MaxCajas, t.MaxMeseros })
             .FirstOrDefaultAsync(cancellationToken);
 
         if (sucursal is null)
@@ -97,6 +97,8 @@ public sealed class TenantStoreService
             Tarjeta = tarjeta,
             Transferencia = transferencia,
             Mixto = mixto,
+            MaxCajas = sucursal.MaxCajas,
+            MaxMeseros = sucursal.MaxMeseros,
             UltimasVentas = ultimas
         });
     }
@@ -250,6 +252,21 @@ public sealed class TenantStoreService
         if (await _db.Usuarios.IgnoreQueryFilters().AnyAsync(u => u.Username == username, cancellationToken))
         {
             return Resultado<UsuarioSucursalDto>.Fail(409, "Ese usuario ya está registrado.");
+        }
+
+        var tope = await _db.Tenants
+            .Where(t => t.Id == _tenant.TenantId)
+            .Select(t => request.Rol == RolUsuario.Cajero ? t.MaxCajas : t.MaxMeseros)
+            .FirstOrDefaultAsync(cancellationToken);
+        var actuales = await _db.Usuarios.CountAsync(u => u.Activo && u.Rol == request.Rol, cancellationToken);
+        if (actuales >= tope)
+        {
+            var esCaja = request.Rol == RolUsuario.Cajero;
+            var puesto = esCaja ? (tope == 1 ? "caja" : "cajas") : (tope == 1 ? "mesero" : "meseros");
+            var mensaje = tope == 0
+                ? (esCaja ? "Esta sucursal no tiene cajas incluidas." : "Esta sucursal no tiene meseros incluidos.")
+                : $"Esta sucursal ya llegó al máximo de {tope} {puesto}.";
+            return Resultado<UsuarioSucursalDto>.Fail(400, mensaje);
         }
 
         var usuario = new Usuario

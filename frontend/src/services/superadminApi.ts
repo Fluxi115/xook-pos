@@ -9,6 +9,10 @@ export interface TenantAdmin {
   estado: 'Activo' | 'Suspendido' | 'Inactivo';
   fechaVencimiento: string;
   totalUsuarios: number;
+  maxCajas: number;
+  maxMeseros: number;
+  cajas: number;
+  meseros: number;
 }
 
 export type Semaforo = 'activo' | 'por-vencer' | 'bloqueado';
@@ -65,6 +69,8 @@ export function crearTenant(body: {
   telefono: string;
   logoUrl: string;
   fechaVencimiento: string;
+  maxCajas: number;
+  maxMeseros: number;
   adminNombre: string;
   adminUsername: string;
   adminPassword: string;
@@ -74,7 +80,10 @@ export function crearTenant(body: {
   );
 }
 
-export function editarTenant(id: string, body: { nombreComercial: string; rucRfc: string; telefono: string; logoUrl: string }) {
+export function editarTenant(
+  id: string,
+  body: { nombreComercial: string; rucRfc: string; telefono: string; logoUrl: string; maxCajas: number; maxMeseros: number },
+) {
   return apiFetch(`/api/v1/superadmin/tenants/${id}`, { method: 'PUT', body: JSON.stringify(body) }).then((response) =>
     leerJson<TenantAdmin>(response),
   );

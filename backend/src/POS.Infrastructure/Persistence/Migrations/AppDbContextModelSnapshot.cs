@@ -348,6 +348,12 @@ namespace POS.Infrastructure.Persistence.Migrations
                     b.Property<string>("LogoUrl")
                         .HasColumnType("text");
 
+                    b.Property<int>("MaxCajas")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("MaxMeseros")
+                        .HasColumnType("integer");
+
                     b.Property<string>("MensajeTicket")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");

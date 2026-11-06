@@ -12,6 +12,10 @@ public sealed class CrearTenantRequest
 
     public string? LogoUrl { get; set; }
 
+    public int MaxCajas { get; set; } = 1;
+
+    public int MaxMeseros { get; set; } = 1;
+
     public DateTime FechaVencimiento { get; set; }
 
     public string AdminNombre { get; set; } = string.Empty;
@@ -30,6 +34,10 @@ public sealed class ActualizarTenantRequest
     public string? Telefono { get; set; }
 
     public string? LogoUrl { get; set; }
+
+    public int MaxCajas { get; set; } = 1;
+
+    public int MaxMeseros { get; set; } = 1;
 }
 
 public sealed class ActualizarSuscripcionRequest
@@ -88,6 +96,14 @@ public sealed class TenantAdminDto
     public DateTime FechaVencimiento { get; set; }
 
     public int TotalUsuarios { get; set; }
+
+    public int MaxCajas { get; set; }
+
+    public int MaxMeseros { get; set; }
+
+    public int Cajas { get; set; }
+
+    public int Meseros { get; set; }
 }
 
 public sealed class OperacionTenant

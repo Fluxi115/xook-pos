@@ -10,11 +10,13 @@ public sealed class CajaTurnoService
 {
     private readonly IAppDbContext _db;
     private readonly ICurrentUser _usuario;
+    private readonly ITenantProvider _tenant;
 
-    public CajaTurnoService(IAppDbContext db, ICurrentUser usuario)
+    public CajaTurnoService(IAppDbContext db, ICurrentUser usuario, ITenantProvider tenant)
     {
         _db = db;
         _usuario = usuario;
+        _tenant = tenant;
     }
 
     public async Task<Resultado<TurnoActivoDto>> AbrirAsync(AbrirTurnoRequest request, CancellationToken cancellationToken)
@@ -32,6 +34,22 @@ public sealed class CajaTurnoService
         if (await TurnoAbiertoAsync(cancellationToken) is not null)
         {
             return Resultado<TurnoActivoDto>.Fail(400, "Ya tienes un turno de caja abierto.");
+        }
+
+        var maximo = await _db.Tenants
+            .Where(t => t.Id == _tenant.TenantId)
+            .Select(t => t.MaxCajas)
+            .FirstOrDefaultAsync(cancellationToken);
+        var abiertas = await _db.TurnosCaja.CountAsync(t => t.Estado == EstadoTurno.Abierto, cancellationToken);
+        if (abiertas >= maximo)
+        {
+            var mensaje = maximo switch
+            {
+                0 => "Esta sucursal no tiene cajas incluidas.",
+                1 => "Esta sucursal solo puede tener una caja abierta.",
+                _ => $"Esta sucursal solo puede tener {maximo} cajas abiertas."
+            };
+            return Resultado<TurnoActivoDto>.Fail(400, mensaje);
         }
 
         var turno = new TurnoCaja

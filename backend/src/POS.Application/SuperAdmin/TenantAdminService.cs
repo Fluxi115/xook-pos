@@ -23,14 +23,8 @@ public sealed class TenantAdminService
             .OrderBy(t => t.NombreComercial)
             .ToListAsync(cancellationToken);
 
-        var conteos = await _db.Usuarios
-            .IgnoreQueryFilters()
-            .GroupBy(u => u.TenantId)
-            .Select(grupo => new { TenantId = grupo.Key, Total = grupo.Count() })
-            .ToListAsync(cancellationToken);
-
-        var porTenant = conteos.ToDictionary(c => c.TenantId, c => c.Total);
-        return tenants.Select(tenant => Mapear(tenant, porTenant.GetValueOrDefault(tenant.Id))).ToList();
+        var conteos = await ContarUsuariosAsync(cancellationToken);
+        return tenants.Select(tenant => Mapear(tenant, conteos.GetValueOrDefault(tenant.Id))).ToList();
     }
 
     public async Task<OperacionTenant> CrearAsync(CrearTenantRequest request, CancellationToken cancellationToken)
@@ -60,6 +54,11 @@ public sealed class TenantAdminService
             return OperacionTenant.Fail(400, "Indica la fecha de vencimiento.");
         }
 
+        if (!CupoValido(request.MaxCajas, request.MaxMeseros))
+        {
+            return OperacionTenant.Fail(400, "Las cajas y los meseros van de 0 a 99.");
+        }
+
         if (await _db.Tenants.AnyAsync(t => t.RucRfc == rfc, cancellationToken))
         {
             return OperacionTenant.Fail(409, "Ese RFC/RUC ya está registrado.");
@@ -77,6 +76,8 @@ public sealed class TenantAdminService
             RucRfc = rfc,
             Telefono = telefono,
             LogoUrl = logo,
+            MaxCajas = request.MaxCajas,
+            MaxMeseros = request.MaxMeseros,
             Estado = EstadoTenant.Activo,
             FechaVencimiento = AUtc(request.FechaVencimiento),
             FechaCreacion = DateTime.UtcNow
@@ -96,7 +97,7 @@ public sealed class TenantAdminService
         _db.Tenants.Add(tenant);
         _db.Usuarios.Add(admin);
         await _db.SaveChangesAsync(cancellationToken);
-        return OperacionTenant.Ok(Mapear(tenant, 1));
+        return OperacionTenant.Ok(Mapear(tenant, new Cupo(1, 0, 0)));
     }
 
     public async Task<OperacionTenant> ActualizarAsync(Guid id, ActualizarTenantRequest request, CancellationToken cancellationToken)
@@ -127,12 +128,19 @@ public sealed class TenantAdminService
             return OperacionTenant.Fail(400, errorLogo);
         }
 
+        if (!CupoValido(request.MaxCajas, request.MaxMeseros))
+        {
+            return OperacionTenant.Fail(400, "Las cajas y los meseros van de 0 a 99.");
+        }
+
         tenant.Telefono = Limpiar(request.Telefono);
         tenant.LogoUrl = logo;
+        tenant.MaxCajas = request.MaxCajas;
+        tenant.MaxMeseros = request.MaxMeseros;
         await _db.SaveChangesAsync(cancellationToken);
 
-        var usuarios = await _db.Usuarios.IgnoreQueryFilters().CountAsync(u => u.TenantId == id, cancellationToken);
-        return OperacionTenant.Ok(Mapear(tenant, usuarios));
+        var conteos = await ContarUsuariosAsync(cancellationToken);
+        return OperacionTenant.Ok(Mapear(tenant, conteos.GetValueOrDefault(id)));
     }
 
     public async Task<OperacionTenant> ActualizarSuscripcionAsync(
@@ -155,8 +163,8 @@ public sealed class TenantAdminService
         tenant.FechaVencimiento = AUtc(request.FechaVencimiento);
         await _db.SaveChangesAsync(cancellationToken);
 
-        var usuarios = await _db.Usuarios.IgnoreQueryFilters().CountAsync(u => u.TenantId == id, cancellationToken);
-        return OperacionTenant.Ok(Mapear(tenant, usuarios));
+        var conteos = await ContarUsuariosAsync(cancellationToken);
+        return OperacionTenant.Ok(Mapear(tenant, conteos.GetValueOrDefault(id)));
     }
 
     public async Task<List<PagoSuscripcionDto>> ListarPagosAsync(CancellationToken cancellationToken)
@@ -240,7 +248,33 @@ public sealed class TenantAdminService
         });
     }
 
-    private static TenantAdminDto Mapear(Tenant tenant, int totalUsuarios) => new()
+    private async Task<Dictionary<Guid, Cupo>> ContarUsuariosAsync(CancellationToken cancellationToken)
+    {
+        var filas = await _db.Usuarios
+            .IgnoreQueryFilters()
+            .GroupBy(u => new { u.TenantId, u.Rol, u.Activo })
+            .Select(grupo => new
+            {
+                grupo.Key.TenantId,
+                grupo.Key.Rol,
+                grupo.Key.Activo,
+                Total = grupo.Count()
+            })
+            .ToListAsync(cancellationToken);
+
+        return filas
+            .GroupBy(fila => fila.TenantId)
+            .ToDictionary(
+                grupo => grupo.Key,
+                grupo => new Cupo(
+                    grupo.Sum(fila => fila.Total),
+                    grupo.Where(fila => fila.Activo && fila.Rol == RolUsuario.Cajero).Sum(fila => fila.Total),
+                    grupo.Where(fila => fila.Activo && fila.Rol == RolUsuario.Mesero).Sum(fila => fila.Total)));
+    }
+
+    private static bool CupoValido(int cajas, int meseros) => cajas is >= 0 and <= 99 && meseros is >= 0 and <= 99;
+
+    private static TenantAdminDto Mapear(Tenant tenant, Cupo cupo) => new()
     {
         Id = tenant.Id,
         NombreComercial = tenant.NombreComercial,
@@ -249,8 +283,14 @@ public sealed class TenantAdminService
         LogoUrl = tenant.LogoUrl,
         Estado = tenant.Estado.ToString(),
         FechaVencimiento = tenant.FechaVencimiento,
-        TotalUsuarios = totalUsuarios
+        TotalUsuarios = cupo.Total,
+        MaxCajas = tenant.MaxCajas,
+        MaxMeseros = tenant.MaxMeseros,
+        Cajas = cupo.Cajas,
+        Meseros = cupo.Meseros
     };
+
+    private readonly record struct Cupo(int Total, int Cajas, int Meseros);
 
     private static bool LogoValido(string? valor, out string? logo, out string error)
     {

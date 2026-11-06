@@ -10,6 +10,8 @@ export interface DashboardAdmin {
   tarjeta: number;
   transferencia: number;
   mixto: number;
+  maxCajas: number;
+  maxMeseros: number;
   ultimasVentas: VentaResumen[];
 }
 

@@ -180,7 +180,7 @@ export function SuperAdminPage({ onCerrarSesion }: SuperAdminPageProps) {
                   <th className="px-4 py-3 font-medium">Negocio</th>
                   <th className="px-4 py-3 font-medium">RFC / RUC</th>
                   <th className="px-4 py-3 font-medium">Teléfono</th>
-                  <th className="px-4 py-3 font-medium">Usuarios</th>
+                  <th className="px-4 py-3 font-medium">Cupo</th>
                   <th className="px-4 py-3 font-medium">Vence</th>
                   <th className="px-4 py-3 font-medium">Estado</th>
                   <th className="px-4 py-3 font-medium">Acciones</th>
@@ -199,7 +199,9 @@ export function SuperAdminPage({ onCerrarSesion }: SuperAdminPageProps) {
                       </td>
                       <td className="px-4 py-3">{tenant.rucRfc}</td>
                       <td className="px-4 py-3">{tenant.telefono || '—'}</td>
-                      <td className="px-4 py-3">{tenant.totalUsuarios}</td>
+                      <td className="px-4 py-3">
+                        {tenant.cajas}/{tenant.maxCajas} cajas · {tenant.meseros}/{tenant.maxMeseros} meseros
+                      </td>
                       <td className="px-4 py-3">{fecha.format(new Date(tenant.fechaVencimiento))}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm ${COLOR[luz]}`}>
@@ -289,10 +291,18 @@ function AltaModal({ onCerrar, onLista }: { onCerrar: () => void; onLista: () =>
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [vence, setVence] = useState(() => fechaInicial(12));
+  const [cajas, setCajas] = useState('1');
+  const [meseros, setMeseros] = useState('1');
   const [guardando, setGuardando] = useState(false);
 
   async function enviar(event: FormEvent) {
     event.preventDefault();
+    const maxCajas = cupoDe(cajas);
+    const maxMeseros = cupoDe(meseros);
+    if (maxCajas === null || maxMeseros === null) {
+      toast.error('Las cajas y los meseros van de 0 a 99.');
+      return;
+    }
     setGuardando(true);
     try {
       await crearTenant({
@@ -301,6 +311,8 @@ function AltaModal({ onCerrar, onLista }: { onCerrar: () => void; onLista: () =>
         telefono,
         logoUrl: logo,
         fechaVencimiento: finDeDiaUtc(vence),
+        maxCajas,
+        maxMeseros,
         adminNombre,
         adminUsername: username,
         adminPassword: password,
@@ -320,6 +332,8 @@ function AltaModal({ onCerrar, onLista }: { onCerrar: () => void; onLista: () =>
         <Campo id="alta-nombre" etiqueta="Nombre comercial" value={nombre} onChange={setNombre} required />
         <Campo id="alta-rfc" etiqueta="RFC / RUC" value={rfc} onChange={setRfc} required />
         <Campo id="alta-tel" etiqueta="Teléfono" value={telefono} onChange={setTelefono} />
+        <Campo id="alta-cajas" etiqueta="Cajas permitidas" value={cajas} onChange={setCajas} type="number" required />
+        <Campo id="alta-meseros" etiqueta="Meseros permitidos" value={meseros} onChange={setMeseros} type="number" required />
         <LogoCampo id="alta-logo" valor={logo} onChange={setLogo} />
         <Campo id="alta-admin" etiqueta="Nombre del administrador" value={adminNombre} onChange={setAdminNombre} required />
         <Campo id="alta-user" etiqueta="Usuario" value={username} onChange={setUsername} required />
@@ -368,13 +382,21 @@ function EditarModal({
   const [rfc, setRfc] = useState(tenant.rucRfc);
   const [telefono, setTelefono] = useState(tenant.telefono ?? '');
   const [logo, setLogo] = useState(tenant.logoUrl ?? '');
+  const [cajas, setCajas] = useState(String(tenant.maxCajas));
+  const [meseros, setMeseros] = useState(String(tenant.maxMeseros));
   const [guardando, setGuardando] = useState(false);
 
   async function enviar(event: FormEvent) {
     event.preventDefault();
+    const maxCajas = cupoDe(cajas);
+    const maxMeseros = cupoDe(meseros);
+    if (maxCajas === null || maxMeseros === null) {
+      toast.error('Las cajas y los meseros van de 0 a 99.');
+      return;
+    }
     setGuardando(true);
     try {
-      await editarTenant(tenant.id, { nombreComercial: nombre, rucRfc: rfc, telefono, logoUrl: logo });
+      await editarTenant(tenant.id, { nombreComercial: nombre, rucRfc: rfc, telefono, logoUrl: logo, maxCajas, maxMeseros });
       toast.success('Datos actualizados');
       await onLista();
     } catch (caught) {
@@ -390,6 +412,11 @@ function EditarModal({
         <Campo id="edit-nombre" etiqueta="Nombre comercial" value={nombre} onChange={setNombre} required />
         <Campo id="edit-rfc" etiqueta="RFC / RUC" value={rfc} onChange={setRfc} required />
         <Campo id="edit-tel" etiqueta="Teléfono" value={telefono} onChange={setTelefono} />
+        <Campo id="edit-cajas" etiqueta="Cajas permitidas" value={cajas} onChange={setCajas} type="number" required />
+        <Campo id="edit-meseros" etiqueta="Meseros permitidos" value={meseros} onChange={setMeseros} type="number" required />
+        <p className="text-sm text-muted">
+          Hoy tiene {tenant.cajas} {tenant.cajas === 1 ? 'caja' : 'cajas'} y {tenant.meseros} {tenant.meseros === 1 ? 'mesero' : 'meseros'}. Con 0 no se puede crear ese puesto.
+        </p>
         <LogoCampo id="edit-logo" valor={logo} onChange={setLogo} />
         <div className="flex justify-end gap-2">
           <button type="button" className="min-h-12 rounded-2xl border border-line px-4" onClick={onCerrar}>
@@ -707,6 +734,12 @@ function LogoCampo({ id, valor, onChange }: { id: string; valor: string; onChang
       </div>
     </div>
   );
+}
+
+function cupoDe(valor: string) {
+  const numero = Number(valor);
+  if (!Number.isInteger(numero) || numero < 0 || numero > 99) return null;
+  return numero;
 }
 
 function Campo({

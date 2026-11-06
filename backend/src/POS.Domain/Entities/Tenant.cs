@@ -18,6 +18,10 @@ public class Tenant
 
     public decimal TasaImpuesto { get; set; }
 
+    public int MaxCajas { get; set; } = 1;
+
+    public int MaxMeseros { get; set; } = 1;
+
     public string? LogoUrl { get; set; }
 
     public EstadoTenant Estado { get; set; } = EstadoTenant.Activo;
