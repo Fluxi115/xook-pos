@@ -5,6 +5,7 @@ import { ApiError, cerrarSesion, leerSesion } from '../../services/apiClient';
 import { abrirTurno, cerrarTurno, formatoFechaHora, registrarMovimiento, turnoActivo, type CorteCaja, type TurnoActivo } from '../../services/cajaApi';
 import { bloqueaCierre, sincronizarVentasPendientes } from '../../services/syncService';
 import { MARCA } from '../../marca';
+import { compartirCortePdf, esAplicacionNativa } from './compartirPdf';
 import { moneda, redondear } from './pedido';
 import { Spinner } from './Spinner';
 
@@ -248,9 +249,42 @@ export function CorteModal({
 }
 
 export function TicketCorte({ corte, negocio, onSalir }: { corte: CorteCaja; negocio: string; onSalir: () => void }) {
+  const [compartiendo, setCompartiendo] = useState(false);
+  const nativo = esAplicacionNativa();
+
   function salir() {
     cerrarSesion();
     onSalir();
+  }
+
+  async function imprimirOCompartir() {
+    if (compartiendo) return;
+    if (!nativo) {
+      window.print();
+      return;
+    }
+    setCompartiendo(true);
+    try {
+      await compartirCortePdf({
+        negocio,
+        fechaCorte: corte.fechaCorte,
+        cajero: corte.cajero,
+        fondoInicial: corte.fondoInicial,
+        totalVentasEfectivo: corte.totalVentasEfectivo,
+        totalVentasTarjeta: corte.totalVentasTarjeta,
+        totalVentasTransferencia: corte.totalVentasTransferencia,
+        totalEntradas: corte.totalEntradas,
+        totalSalidas: corte.totalSalidas,
+        efectivoEsperado: corte.efectivoEsperado,
+        efectivoContado: corte.efectivoContado,
+        diferencia: corte.diferencia,
+        observaciones: corte.observaciones,
+      });
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : 'No se pudo compartir el PDF.');
+    } finally {
+      setCompartiendo(false);
+    }
   }
 
   return (
@@ -276,8 +310,13 @@ export function TicketCorte({ corte, negocio, onSalir }: { corte: CorteCaja; neg
           {corte.observaciones && <p className="mt-3 text-sm">{corte.observaciones}</p>}
         </article>
         <div className="mt-4 flex gap-2 print:hidden">
-          <button type="button" className="min-h-12 flex-1 rounded-2xl border border-line" onClick={() => window.print()}>
-            Imprimir
+          <button
+            type="button"
+            disabled={compartiendo}
+            className="min-h-12 flex-1 rounded-2xl border border-line disabled:opacity-50"
+            onClick={() => void imprimirOCompartir()}
+          >
+            {compartiendo ? 'Preparando...' : nativo ? 'Compartir PDF' : 'Imprimir'}
           </button>
           <button type="button" className="min-h-12 flex-1 rounded-2xl bg-amber font-semibold text-ink" onClick={salir}>
             Salir

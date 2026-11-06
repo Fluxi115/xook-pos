@@ -38,6 +38,12 @@ public sealed class VentaResumenDto
     public string MetodoPago { get; set; } = string.Empty;
 
     public string Cajero { get; set; } = string.Empty;
+
+    public bool Cancelada { get; set; }
+
+    public string? MotivoCancelacion { get; set; }
+
+    public DateTime? FechaCancelacion { get; set; }
 }
 
 public sealed class ProductoAdminDto
@@ -116,6 +122,56 @@ public sealed class UsuarioSucursalDto
     public string Rol { get; set; } = string.Empty;
 
     public bool Activo { get; set; }
+}
+
+public sealed class ReporteDto
+{
+    public string Periodo { get; set; } = string.Empty;
+
+    public DateTime Desde { get; set; }
+
+    public DateTime Hasta { get; set; }
+
+    public decimal Ventas { get; set; }
+
+    public int Ordenes { get; set; }
+
+    public decimal TicketPromedio { get; set; }
+
+    public decimal Efectivo { get; set; }
+
+    public decimal Tarjeta { get; set; }
+
+    public decimal Transferencia { get; set; }
+
+    public List<ProductoReporteDto> Productos { get; set; } = [];
+
+    public List<VentaResumenDto> Movimientos { get; set; } = [];
+}
+
+public sealed class ProductoReporteDto
+{
+    public string Nombre { get; set; } = string.Empty;
+
+    public int Cantidad { get; set; }
+
+    public decimal Total { get; set; }
+}
+
+public sealed class CancelarVentaRequest
+{
+    public string Motivo { get; set; } = string.Empty;
+}
+
+public sealed class TicketSucursalDto
+{
+    public string? Direccion { get; set; }
+
+    public string? Telefono { get; set; }
+
+    public string? MensajeTicket { get; set; }
+
+    public decimal TasaImpuesto { get; set; }
 }
 
 public sealed class CrearUsuarioSucursalRequest

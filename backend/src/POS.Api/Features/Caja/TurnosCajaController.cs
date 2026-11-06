@@ -5,7 +5,7 @@ using POS.Application.TenantAdmin;
 
 namespace POS.Api.Features.Caja;
 
-[Authorize]
+[Authorize(Roles = "Cajero,AdminSucursal")]
 [ApiController]
 [Route("api/v1/caja/turnos")]
 public sealed class TurnosCajaController : ControllerBase

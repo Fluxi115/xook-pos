@@ -54,6 +54,10 @@ public sealed class CatalogoService
                 NombreComercial = tenant.NombreComercial,
                 RucRfc = tenant.RucRfc,
                 LogoUrl = tenant.LogoUrl,
+                Telefono = tenant.Telefono,
+                Direccion = tenant.Direccion,
+                MensajeTicket = tenant.MensajeTicket,
+                TasaImpuesto = tenant.TasaImpuesto,
                 Estado = tenant.Estado.ToString(),
                 FechaVencimiento = tenant.FechaVencimiento
             },

@@ -12,6 +12,12 @@ public class Tenant
 
     public string? Telefono { get; set; }
 
+    public string? Direccion { get; set; }
+
+    public string? MensajeTicket { get; set; }
+
+    public decimal TasaImpuesto { get; set; }
+
     public string? LogoUrl { get; set; }
 
     public EstadoTenant Estado { get; set; } = EstadoTenant.Activo;

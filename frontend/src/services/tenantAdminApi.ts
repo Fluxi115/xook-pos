@@ -20,6 +20,9 @@ export interface VentaResumen {
   total: number;
   metodoPago: string;
   cajero: string;
+  cancelada: boolean;
+  motivoCancelacion: string | null;
+  fechaCancelacion: string | null;
 }
 
 export interface ProductoAdmin {
@@ -132,6 +135,56 @@ export interface CorteAdmin {
 
 export function listarCortes() {
   return apiFetch('/api/v1/tenant-admin/cortes').then((response) => leerJson<CorteAdmin[]>(response));
+}
+
+export type PeriodoReporte = 'dia' | 'semana' | 'mes';
+
+export interface ProductoReporte {
+  nombre: string;
+  cantidad: number;
+  total: number;
+}
+
+export interface ReporteSucursal {
+  periodo: PeriodoReporte;
+  desde: string;
+  hasta: string;
+  ventas: number;
+  ordenes: number;
+  ticketPromedio: number;
+  efectivo: number;
+  tarjeta: number;
+  transferencia: number;
+  productos: ProductoReporte[];
+  movimientos: VentaResumen[];
+}
+
+export interface TicketSucursal {
+  direccion: string | null;
+  telefono: string | null;
+  mensajeTicket: string | null;
+  tasaImpuesto: number;
+}
+
+export function reporteSucursal(periodo: PeriodoReporte) {
+  return apiFetch(`/api/v1/tenant-admin/reportes?periodo=${periodo}`).then((response) => leerJson<ReporteSucursal>(response));
+}
+
+export function cancelarVenta(id: string, motivo: string) {
+  return apiFetch(`/api/v1/tenant-admin/ventas/${id}/cancelar`, {
+    method: 'POST',
+    body: JSON.stringify({ motivo }),
+  }).then((response) => leerJson<VentaResumen>(response));
+}
+
+export function leerTicket() {
+  return apiFetch('/api/v1/tenant-admin/ticket').then((response) => leerJson<TicketSucursal>(response));
+}
+
+export function guardarTicket(body: TicketSucursal) {
+  return apiFetch('/api/v1/tenant-admin/ticket', { method: 'PUT', body: JSON.stringify(body) }).then((response) =>
+    leerJson<TicketSucursal>(response),
+  );
 }
 
 export function crearPersonal(body: { nombre: string; username: string; password: string; rol: 'Cajero' | 'Mesero' }) {

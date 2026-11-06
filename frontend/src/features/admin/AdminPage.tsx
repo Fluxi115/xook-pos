@@ -25,11 +25,14 @@ import {
   type GrupoAdmin,
   type ProductoAdmin,
   type UsuarioSucursal,
+  type VentaResumen,
 } from '../../services/tenantAdminApi';
+import { AnularVenta, ListaVentas, ReportesPanel } from './ReportesPanel';
+import { TicketPanel } from './TicketPanel';
 import { ResultadoArqueo } from '../pos/TurnoCaja';
 import type { CorteCaja } from '../../services/cajaApi';
 
-type Seccion = 'resumen' | 'menu' | 'personal' | 'cortes';
+type Seccion = 'resumen' | 'reportes' | 'menu' | 'personal' | 'cortes' | 'ticket';
 
 interface AdminPageProps {
   onCerrarSesion: () => void;
@@ -48,6 +51,7 @@ export function AdminPage({ onCerrarSesion }: AdminPageProps) {
   const [error, setError] = useState('');
   const [productoEditado, setProductoEditado] = useState<ProductoAdmin | null | undefined>(undefined);
   const [altaUsuario, setAltaUsuario] = useState(false);
+  const [anular, setAnular] = useState<VentaResumen | null>(null);
 
   async function cargar() {
     setCargando(true);
@@ -119,6 +123,9 @@ export function AdminPage({ onCerrarSesion }: AdminPageProps) {
           <Tab activo={seccion === 'resumen'} onClick={() => setSeccion('resumen')}>
             Resumen
           </Tab>
+          <Tab activo={seccion === 'reportes'} onClick={() => setSeccion('reportes')}>
+            Reportes
+          </Tab>
           <Tab activo={seccion === 'menu'} onClick={() => setSeccion('menu')}>
             Menú
           </Tab>
@@ -127,6 +134,9 @@ export function AdminPage({ onCerrarSesion }: AdminPageProps) {
           </Tab>
           <Tab activo={seccion === 'cortes'} onClick={() => setSeccion('cortes')}>
             Cortes
+          </Tab>
+          <Tab activo={seccion === 'ticket'} onClick={() => setSeccion('ticket')}>
+            Ticket
           </Tab>
         </nav>
         <div className="mt-4 flex gap-2 md:mt-8 md:flex-col">
@@ -156,7 +166,9 @@ export function AdminPage({ onCerrarSesion }: AdminPageProps) {
             </button>
           </div>
         )}
-        {!cargando && !error && seccion === 'resumen' && metricas && <Resumen metricas={metricas} />}
+        {!cargando && !error && seccion === 'resumen' && metricas && <Resumen metricas={metricas} onAnular={setAnular} />}
+        {!cargando && !error && seccion === 'reportes' && <ReportesPanel />}
+        {!cargando && !error && seccion === 'ticket' && <TicketPanel />}
         {!cargando && !error && seccion === 'menu' && (
           <Menu
             productos={productos}
@@ -181,6 +193,16 @@ export function AdminPage({ onCerrarSesion }: AdminPageProps) {
           }}
         />
       )}
+      {anular && (
+        <AnularVenta
+          venta={anular}
+          onCerrar={() => setAnular(null)}
+          onLista={async () => {
+            setAnular(null);
+            await cargar();
+          }}
+        />
+      )}
       {altaUsuario && (
         <UsuarioModal
           onCerrar={() => setAltaUsuario(false)}
@@ -194,7 +216,7 @@ export function AdminPage({ onCerrarSesion }: AdminPageProps) {
   );
 }
 
-function Resumen({ metricas }: { metricas: DashboardAdmin }) {
+function Resumen({ metricas, onAnular }: { metricas: DashboardAdmin; onAnular: (venta: VentaResumen) => void }) {
   return (
     <section>
       <h2 className="text-2xl font-semibold">Hoy</h2>
@@ -207,34 +229,7 @@ function Resumen({ metricas }: { metricas: DashboardAdmin }) {
         <Tarjeta etiqueta="Transferencia" valor={moneda.format(metricas.transferencia)} />
       </div>
       <h3 className="mt-8 text-lg font-semibold">Últimas ventas</h3>
-      {metricas.ultimasVentas.length === 0 ? (
-        <p className="mt-3 text-muted">Todavía no hay ventas registradas.</p>
-      ) : (
-        <div className="mt-3 overflow-x-auto rounded-3xl border border-line">
-          <table className="min-w-[640px] w-full text-left">
-            <thead className="bg-panel text-sm text-muted">
-              <tr>
-                <th className="px-4 py-3 font-medium">Folio</th>
-                <th className="px-4 py-3 font-medium">Fecha</th>
-                <th className="px-4 py-3 font-medium">Cajero</th>
-                <th className="px-4 py-3 font-medium">Pago</th>
-                <th className="px-4 py-3 font-medium">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {metricas.ultimasVentas.map((venta) => (
-                <tr key={venta.id} className="border-t border-line">
-                  <td className="px-4 py-3">{venta.folioVenta}</td>
-                  <td className="px-4 py-3">{formatoFechaHora(venta.fechaHora)}</td>
-                  <td className="px-4 py-3">{venta.cajero}</td>
-                  <td className="px-4 py-3">{venta.metodoPago}</td>
-                  <td className="px-4 py-3">{moneda.format(venta.total)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <ListaVentas ventas={metricas.ultimasVentas} onAnular={onAnular} vacio="Todavía no hay ventas registradas." />
     </section>
   );
 }
@@ -289,6 +284,7 @@ function Menu({
     <section>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-2xl font-semibold">Menú</h2>
+        <p className="mt-1 text-sm text-muted">Si lo marcas agotado, deja de aparecer en la caja al actualizar el menú.</p>
         <button type="button" className="min-h-11 rounded-2xl bg-amber px-4 font-semibold text-ink" onClick={onNuevo}>
           Nuevo producto
         </button>

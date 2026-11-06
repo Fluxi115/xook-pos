@@ -23,9 +23,9 @@ export function precioConExtras(precioBase: number, modificadores: ModificadorSe
   return redondear(precioBase + modificadores.reduce((suma, extra) => suma + extra.precioAdicional, 0));
 }
 
-export function totalesDe(lineas: LineaPedido[]) {
+export function totalesDe(lineas: LineaPedido[], tasa = TASA_IMPUESTO) {
   const subtotal = redondear(lineas.reduce((suma, linea) => suma + linea.precioUnitario * linea.cantidad, 0));
-  const impuestos = redondear(subtotal * TASA_IMPUESTO);
+  const impuestos = redondear(subtotal * tasa);
   const total = redondear(subtotal + impuestos);
   return { subtotal, impuestos, total };
 }

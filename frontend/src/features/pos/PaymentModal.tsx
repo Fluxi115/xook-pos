@@ -4,6 +4,7 @@ import type { MetodoPago, VentaItemPayload } from '../../db/db';
 import { ApiError } from '../../services/apiClient';
 import { cotizarDesdeCatalogo, registrarVenta } from '../../services/syncService';
 import { MARCA } from '../../marca';
+import { compartirReciboPdf, esAplicacionNativa } from './compartirPdf';
 import { BILLETES, moneda, redondear, totalesDe, type LineaPedido } from './pedido';
 import { Spinner } from './Spinner';
 
@@ -38,18 +39,34 @@ interface PaymentModalProps {
   lineas: LineaPedido[];
   nombreNegocio: string;
   cajero: string;
+  tasa?: number;
+  direccion?: string | null;
+  telefono?: string | null;
+  mensajeTicket?: string | null;
   onCerrar: () => void;
   onVentaRegistrada: () => void;
 }
 
-export function PaymentModal({ lineas, nombreNegocio, cajero, onCerrar, onVentaRegistrada }: PaymentModalProps) {
+export function PaymentModal({
+  lineas,
+  nombreNegocio,
+  cajero,
+  tasa = 0,
+  direccion,
+  telefono,
+  mensajeTicket,
+  onCerrar,
+  onVentaRegistrada,
+}: PaymentModalProps) {
   const [pedido] = useState(lineas);
   const [metodo, setMetodo] = useState<MetodoPago>('Efectivo');
   const [recibido, setRecibido] = useState('');
   const [guardando, setGuardando] = useState(false);
   const enviando = useRef(false);
   const [recibo, setRecibo] = useState<Recibo | null>(null);
-  const { impuestos, total } = totalesDe(pedido);
+  const [compartiendo, setCompartiendo] = useState(false);
+  const nativo = esAplicacionNativa();
+  const { impuestos, total } = totalesDe(pedido, tasa);
 
   const recibidoNumero = Number(recibido);
   const recibidoValido = recibido.trim() !== '' && Number.isFinite(recibidoNumero) && recibidoNumero >= 0;
@@ -60,6 +77,22 @@ export function PaymentModal({ lineas, nombreNegocio, cajero, onCerrar, onVentaR
     const actual = Number(recibido);
     const base = Number.isFinite(actual) && recibido.trim() !== '' ? actual : 0;
     setRecibido(String(redondear(base + billete)));
+  }
+
+  async function imprimirOCompartir() {
+    if (!recibo || compartiendo) return;
+    if (!nativo) {
+      window.print();
+      return;
+    }
+    setCompartiendo(true);
+    try {
+      await compartirReciboPdf({ ...recibo, nombreNegocio, cajero, direccion, telefono, mensaje: mensajeTicket });
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : 'No se pudo compartir el PDF.');
+    } finally {
+      setCompartiendo(false);
+    }
   }
 
   async function completar() {
@@ -74,6 +107,7 @@ export function PaymentModal({ lineas, nombreNegocio, cajero, onCerrar, onVentaR
           cantidad: linea.cantidad,
           modificadores: linea.modificadores,
         })),
+        tasa,
       );
       if (Math.abs(cotizacion.total - total) > 0.009) {
         toast.error(`El precio del menú cambió. El total ahora es ${moneda.format(cotizacion.total)}.`);
@@ -124,6 +158,8 @@ export function PaymentModal({ lineas, nombreNegocio, cajero, onCerrar, onVentaR
             <article className="ticket-impresion mx-auto w-full max-w-sm rounded-2xl bg-cream px-4 py-5 text-ink">
               <p className="text-center text-xs font-semibold tracking-[0.14em]">{MARCA}</p>
               <p className="mt-1 text-center text-lg font-semibold">{nombreNegocio}</p>
+              {direccion && <p className="text-center text-sm">{direccion}</p>}
+              {telefono && <p className="text-center text-sm">{telefono}</p>}
               <p className="text-center text-sm">Folio {recibo.folio}</p>
               <p className="text-center text-sm">{fechaTicket.format(new Date(recibo.fechaHora))}</p>
               <p className="text-center text-sm">Atendió {cajero}</p>
@@ -151,11 +187,17 @@ export function PaymentModal({ lineas, nombreNegocio, cajero, onCerrar, onVentaR
               <p className="mt-2 text-sm">Pago: {recibo.metodoPago}</p>
               {recibo.recibido !== null && <Fila etiqueta="Recibido" valor={moneda.format(recibo.recibido)} />}
               {recibo.cambio !== null && <Fila etiqueta="Cambio" valor={moneda.format(recibo.cambio)} />}
+              {mensajeTicket && <p className="mt-4 text-center text-sm">{mensajeTicket}</p>}
               <p className="mt-4 text-center text-sm">Gracias por su visita</p>
             </article>
             <div className="mt-4 grid grid-cols-2 gap-2 print:hidden">
-              <button type="button" className="min-h-14 rounded-2xl border border-line text-base" onClick={() => window.print()}>
-                Imprimir
+              <button
+                type="button"
+                disabled={compartiendo}
+                className="min-h-14 rounded-2xl border border-line text-base disabled:opacity-50"
+                onClick={() => void imprimirOCompartir()}
+              >
+                {compartiendo ? 'Preparando...' : nativo ? 'Compartir PDF' : 'Imprimir'}
               </button>
               <button type="button" className="min-h-14 rounded-2xl bg-amber text-base font-semibold text-ink" onClick={onCerrar}>
                 Nueva venta

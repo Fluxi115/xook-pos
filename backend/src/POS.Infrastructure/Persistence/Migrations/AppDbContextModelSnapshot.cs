@@ -219,6 +219,44 @@ namespace POS.Infrastructure.Persistence.Migrations
                     b.ToTable("opciones_modificador", (string)null);
                 });
 
+            modelBuilder.Entity("POS.Domain.Entities.PagoSuscripcion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("FechaPago")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Medio")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("Meses")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Monto")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("Nota")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("VigenciaHasta")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "FechaPago");
+
+                    b.ToTable("pagos_suscripcion", (string)null);
+                });
+
             modelBuilder.Entity("POS.Domain.Entities.Producto", b =>
                 {
                     b.Property<Guid>("Id")
@@ -297,6 +335,10 @@ namespace POS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<string>("Direccion")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<DateTime>("FechaCreacion")
                         .HasColumnType("timestamp with time zone");
 
@@ -305,6 +347,10 @@ namespace POS.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("LogoUrl")
                         .HasColumnType("text");
+
+                    b.Property<string>("MensajeTicket")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<string>("NombreComercial")
                         .IsRequired()
@@ -315,6 +361,10 @@ namespace POS.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<decimal>("TasaImpuesto")
+                        .HasPrecision(6, 4)
+                        .HasColumnType("numeric(6,4)");
 
                     b.Property<string>("Telefono")
                         .HasMaxLength(30)
@@ -416,10 +466,16 @@ namespace POS.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("Cancelada")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("EstadoSincronizacion")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("FechaCancelacion")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("FechaHora")
                         .HasColumnType("timestamp with time zone");
@@ -433,6 +489,10 @@ namespace POS.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<string>("MotivoCancelacion")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<decimal>("Subtotal")
                         .HasPrecision(18, 2)
@@ -583,6 +643,17 @@ namespace POS.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("GrupoModificador");
+                });
+
+            modelBuilder.Entity("POS.Domain.Entities.PagoSuscripcion", b =>
+                {
+                    b.HasOne("POS.Domain.Entities.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("POS.Domain.Entities.Producto", b =>

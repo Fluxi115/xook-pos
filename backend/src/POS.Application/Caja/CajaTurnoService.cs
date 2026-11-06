@@ -256,7 +256,7 @@ public sealed class CajaTurnoService
 
         var ventas = await _db.Ventas
             .AsNoTracking()
-            .Where(v => v.TurnoCajaId == turno.Id)
+            .Where(v => v.TurnoCajaId == turno.Id && !v.Cancelada)
             .Select(v => new { v.Total, v.MetodoPago })
             .ToListAsync(cancellationToken);
 

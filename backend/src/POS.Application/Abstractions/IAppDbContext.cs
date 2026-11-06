@@ -29,5 +29,7 @@ public interface IAppDbContext
 
     DbSet<CorteCaja> CortesCaja { get; }
 
+    DbSet<PagoSuscripcion> PagosSuscripcion { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

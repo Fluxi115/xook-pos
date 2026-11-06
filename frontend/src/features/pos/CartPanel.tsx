@@ -3,15 +3,16 @@ import { moneda, piezasDe, totalesDe, type LineaPedido } from './pedido';
 
 interface CartPanelProps {
   lineas: LineaPedido[];
+  tasa?: number;
   onCambiarCantidad: (key: string, delta: number) => void;
   onQuitar: (key: string) => void;
   onVaciar: () => void;
   onCobrar: () => void;
 }
 
-export function CartPanel({ lineas, onCambiarCantidad, onQuitar, onVaciar, onCobrar }: CartPanelProps) {
+export function CartPanel({ lineas, tasa = 0, onCambiarCantidad, onQuitar, onVaciar, onCobrar }: CartPanelProps) {
   const [pedirVacio, setPedirVacio] = useState(false);
-  const { subtotal, impuestos, total } = totalesDe(lineas);
+  const { subtotal, impuestos, total } = totalesDe(lineas, tasa);
   const piezas = piezasDe(lineas);
 
   function vaciar() {

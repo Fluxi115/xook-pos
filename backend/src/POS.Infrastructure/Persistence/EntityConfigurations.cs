@@ -13,8 +13,27 @@ internal sealed class TenantConfiguration : IEntityTypeConfiguration<Tenant>
         builder.Property(t => t.RucRfc).HasMaxLength(20).IsRequired();
         builder.HasIndex(t => t.RucRfc).IsUnique();
         builder.Property(t => t.Telefono).HasMaxLength(30);
+        builder.Property(t => t.Direccion).HasMaxLength(200);
+        builder.Property(t => t.MensajeTicket).HasMaxLength(200);
+        builder.Property(t => t.TasaImpuesto).HasPrecision(6, 4);
         builder.Property(t => t.LogoUrl).HasColumnType("text");
         builder.Property(t => t.Estado).HasConversion<string>().HasMaxLength(20);
+    }
+}
+
+internal sealed class PagoSuscripcionConfiguration : IEntityTypeConfiguration<PagoSuscripcion>
+{
+    public void Configure(EntityTypeBuilder<PagoSuscripcion> builder)
+    {
+        builder.ToTable("pagos_suscripcion");
+        builder.Property(p => p.Monto).HasPrecision(18, 2);
+        builder.Property(p => p.Medio).HasConversion<string>().HasMaxLength(20);
+        builder.Property(p => p.Nota).HasMaxLength(200);
+        builder.HasIndex(p => new { p.TenantId, p.FechaPago });
+        builder.HasOne(p => p.Tenant)
+            .WithMany()
+            .HasForeignKey(p => p.TenantId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -134,6 +153,7 @@ internal sealed class VentaConfiguration : IEntityTypeConfiguration<Venta>
         builder.Property(v => v.Total).HasPrecision(18, 2);
         builder.Property(v => v.MetodoPago).HasConversion<string>().HasMaxLength(20);
         builder.Property(v => v.EstadoSincronizacion).HasConversion<string>().HasMaxLength(20);
+        builder.Property(v => v.MotivoCancelacion).HasMaxLength(200);
         builder.HasIndex(v => new { v.TenantId, v.FolioVenta }).IsUnique();
         builder.HasIndex(v => new { v.TenantId, v.EstadoSincronizacion });
         builder.HasIndex(v => v.TurnoCajaId);

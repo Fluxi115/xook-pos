@@ -159,6 +159,87 @@ public sealed class TenantAdminService
         return OperacionTenant.Ok(Mapear(tenant, usuarios));
     }
 
+    public async Task<List<PagoSuscripcionDto>> ListarPagosAsync(CancellationToken cancellationToken)
+    {
+        return await _db.PagosSuscripcion
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .OrderByDescending(p => p.FechaPago)
+            .Take(100)
+            .Select(p => new PagoSuscripcionDto
+            {
+                Id = p.Id,
+                TenantId = p.TenantId,
+                NombreComercial = p.Tenant.NombreComercial,
+                Monto = p.Monto,
+                Medio = p.Medio.ToString(),
+                FechaPago = p.FechaPago,
+                Meses = p.Meses,
+                VigenciaHasta = p.VigenciaHasta,
+                Nota = p.Nota
+            })
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<OperacionPago> RegistrarPagoAsync(Guid id, RegistrarPagoRequest request, CancellationToken cancellationToken)
+    {
+        if (request.Monto <= 0 || request.Monto > 999_999.99m)
+        {
+            return OperacionPago.Fail(400, "Indica el monto recibido.");
+        }
+
+        if (request.Meses is not 1 and not 12)
+        {
+            return OperacionPago.Fail(400, "El periodo debe ser de un mes o un año.");
+        }
+
+        if (!Enum.IsDefined(request.Medio))
+        {
+            return OperacionPago.Fail(400, "El pago es en efectivo o por transferencia.");
+        }
+
+        var tenant = await _db.Tenants.FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
+        if (tenant is null)
+        {
+            return OperacionPago.Fail(404, "Sucursal no encontrada.");
+        }
+
+        var ahora = DateTime.UtcNow;
+        var vigencia = FinDeDia(tenant.FechaVencimiento > ahora ? tenant.FechaVencimiento.AddMonths(request.Meses) : ahora.AddMonths(request.Meses));
+        var pago = new PagoSuscripcion
+        {
+            Id = Guid.NewGuid(),
+            TenantId = tenant.Id,
+            Monto = decimal.Round(request.Monto, 2, MidpointRounding.AwayFromZero),
+            Medio = request.Medio,
+            FechaPago = ahora,
+            Meses = request.Meses,
+            VigenciaHasta = vigencia,
+            Nota = Limpiar(request.Nota)
+        };
+        if (pago.Nota is { Length: > 200 })
+        {
+            return OperacionPago.Fail(400, "La nota admite hasta 200 caracteres.");
+        }
+
+        tenant.Estado = EstadoTenant.Activo;
+        tenant.FechaVencimiento = vigencia;
+        _db.PagosSuscripcion.Add(pago);
+        await _db.SaveChangesAsync(cancellationToken);
+        return OperacionPago.Ok(new PagoSuscripcionDto
+        {
+            Id = pago.Id,
+            TenantId = pago.TenantId,
+            NombreComercial = tenant.NombreComercial,
+            Monto = pago.Monto,
+            Medio = pago.Medio.ToString(),
+            FechaPago = pago.FechaPago,
+            Meses = pago.Meses,
+            VigenciaHasta = pago.VigenciaHasta,
+            Nota = pago.Nota
+        });
+    }
+
     private static TenantAdminDto Mapear(Tenant tenant, int totalUsuarios) => new()
     {
         Id = tenant.Id,
@@ -205,4 +286,10 @@ public sealed class TenantAdminService
         fecha.Kind == DateTimeKind.Utc ? fecha : fecha.Kind == DateTimeKind.Local
             ? fecha.ToUniversalTime()
             : DateTime.SpecifyKind(fecha, DateTimeKind.Utc);
+
+    private static DateTime FinDeDia(DateTime fecha)
+    {
+        var utc = AUtc(fecha);
+        return new DateTime(utc.Year, utc.Month, utc.Day, 23, 59, 59, 999, DateTimeKind.Utc);
+    }
 }

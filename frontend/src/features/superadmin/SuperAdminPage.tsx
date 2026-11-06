@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { MARCA } from '../../marca';
 import { LogoEmpresa } from '../LogoEmpresa';
@@ -12,14 +11,19 @@ import {
   fechaDesdeHoy,
   fechaInicial,
   finDeDiaUtc,
+  listarPagos,
   listarTenants,
+  registrarPago,
   renovarDesde,
   semaforo,
+  type MedioCobro,
+  type PagoSuscripcion,
   type Semaforo,
   type TenantAdmin,
 } from '../../services/superadminApi';
 
 const fecha = new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeZone: 'UTC' });
+const moneda = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' });
 
 const ETIQUETA: Record<Semaforo, string> = {
   activo: 'Activo',
@@ -39,19 +43,24 @@ interface SuperAdminPageProps {
 
 export function SuperAdminPage({ onCerrarSesion }: SuperAdminPageProps) {
   const [tenants, setTenants] = useState<TenantAdmin[]>([]);
+  const [pagos, setPagos] = useState<PagoSuscripcion[]>([]);
+  const [seccion, setSeccion] = useState<'sucursales' | 'cobranza'>('sucursales');
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const [altaAbierta, setAltaAbierta] = useState(false);
   const [edicion, setEdicion] = useState<TenantAdmin | null>(null);
   const [renovacion, setRenovacion] = useState<TenantAdmin | null>(null);
+  const [cobro, setCobro] = useState<TenantAdmin | null>(null);
   const [ocupadoId, setOcupadoId] = useState<string | null>(null);
 
   async function cargar() {
     setCargando(true);
     setError('');
     try {
-      setTenants(await listarTenants());
+      const [lista, cobros] = await Promise.all([listarTenants(), listarPagos()]);
+      setTenants(lista);
+      setPagos(cobros);
     } catch (caught) {
       setError(caught instanceof ApiError ? caught.message : 'No se pudo cargar el panel.');
     } finally {
@@ -61,10 +70,11 @@ export function SuperAdminPage({ onCerrarSesion }: SuperAdminPageProps) {
 
   useEffect(() => {
     let vigente = true;
-    listarTenants()
-      .then((lista) => {
+    Promise.all([listarTenants(), listarPagos()])
+      .then(([lista, cobros]) => {
         if (!vigente) return;
         setTenants(lista);
+        setPagos(cobros);
         setCargando(false);
       })
       .catch((caught: unknown) => {
@@ -109,15 +119,12 @@ export function SuperAdminPage({ onCerrarSesion }: SuperAdminPageProps) {
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-4 md:px-6">
         <div>
           <p className="text-xs font-semibold tracking-[0.16em] text-amber">{MARCA}</p>
-          <h1 className="text-2xl font-semibold">Sucursales</h1>
+          <h1 className="text-2xl font-semibold">{seccion === 'sucursales' ? 'Sucursales' : 'Cobranza'}</h1>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" className="min-h-11 rounded-2xl bg-amber px-4 font-semibold text-ink" onClick={() => setAltaAbierta(true)}>
             Nuevo cliente
           </button>
-          <Link to="/caja" className="inline-flex min-h-11 items-center rounded-2xl border border-line px-4">
-            Abrir caja
-          </Link>
           <button type="button" className="min-h-11 rounded-2xl border border-line px-4" onClick={salir}>
             Salir
           </button>
@@ -125,6 +132,22 @@ export function SuperAdminPage({ onCerrarSesion }: SuperAdminPageProps) {
       </header>
 
       <main className="px-4 py-5 md:px-6">
+        <div className="mb-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setSeccion('sucursales')}
+            className={`min-h-11 rounded-2xl px-4 ${seccion === 'sucursales' ? 'bg-amber font-semibold text-ink' : 'border border-line'}`}
+          >
+            Sucursales
+          </button>
+          <button
+            type="button"
+            onClick={() => setSeccion('cobranza')}
+            className={`min-h-11 rounded-2xl px-4 ${seccion === 'cobranza' ? 'bg-amber font-semibold text-ink' : 'border border-line'}`}
+          >
+            Cobranza
+          </button>
+        </div>
         <input
           value={busqueda}
           onChange={(event) => setBusqueda(event.target.value)}
@@ -143,9 +166,13 @@ export function SuperAdminPage({ onCerrarSesion }: SuperAdminPageProps) {
           </div>
         )}
 
-        {!cargando && !error && visibles.length === 0 && <p className="text-muted">No hay sucursales para mostrar.</p>}
+        {!cargando && !error && seccion === 'sucursales' && visibles.length === 0 && <p className="text-muted">No hay sucursales para mostrar.</p>}
 
-        {!cargando && !error && visibles.length > 0 && (
+        {!cargando && !error && seccion === 'cobranza' && (
+          <Cobranza tenants={visibles} pagos={pagos} onCobrar={setCobro} />
+        )}
+
+        {!cargando && !error && seccion === 'sucursales' && visibles.length > 0 && (
           <div className="overflow-x-auto rounded-3xl border border-line">
             <table className="min-w-[860px] w-full border-collapse text-left">
               <thead className="bg-panel text-sm text-muted">
@@ -182,6 +209,9 @@ export function SuperAdminPage({ onCerrarSesion }: SuperAdminPageProps) {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">
+                          <button type="button" className="min-h-10 rounded-xl bg-amber px-3 text-sm font-semibold text-ink" onClick={() => setCobro(tenant)}>
+                            Registrar pago
+                          </button>
                           <button type="button" className="min-h-10 rounded-xl border border-line px-3 text-sm" onClick={() => setRenovacion(tenant)}>
                             Renovar fecha
                           </button>
@@ -232,6 +262,16 @@ export function SuperAdminPage({ onCerrarSesion }: SuperAdminPageProps) {
           onCerrar={() => setRenovacion(null)}
           onLista={async () => {
             setRenovacion(null);
+            await cargar();
+          }}
+        />
+      )}
+      {cobro && (
+        <PagoModal
+          tenant={cobro}
+          onCerrar={() => setCobro(null)}
+          onLista={async () => {
+            setCobro(null);
             await cargar();
           }}
         />
@@ -420,6 +460,185 @@ function RenovarModal({
           </button>
           <button type="submit" disabled={guardando} className="min-h-12 rounded-2xl bg-amber px-4 font-semibold text-ink disabled:opacity-50">
             {guardando ? 'Guardando…' : 'Confirmar renovación'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function Cobranza({
+  tenants,
+  pagos,
+  onCobrar,
+}: {
+  tenants: TenantAdmin[];
+  pagos: PagoSuscripcion[];
+  onCobrar: (tenant: TenantAdmin) => void;
+}) {
+  const pendientes = tenants.filter((tenant) => semaforo(tenant) !== 'activo');
+  const ids = new Set(tenants.map((tenant) => tenant.id));
+  const historial = pagos.filter((pago) => ids.has(pago.tenantId));
+  const alCorriente = tenants.length - pendientes.length;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-3xl border border-line px-4 py-4">
+          <p className="text-sm text-muted">Por cobrar</p>
+          <p className="mt-1 text-3xl font-semibold">{pendientes.length}</p>
+        </div>
+        <div className="rounded-3xl border border-line px-4 py-4">
+          <p className="text-sm text-muted">Al corriente</p>
+          <p className="mt-1 text-3xl font-semibold">{alCorriente}</p>
+        </div>
+      </div>
+      {pendientes.length === 0 ? (
+        <p className="text-muted">Todos los clientes mostrados están al corriente.</p>
+      ) : (
+        <div className="overflow-x-auto rounded-3xl border border-line">
+          <table className="min-w-[720px] w-full border-collapse text-left">
+            <thead className="bg-panel text-sm text-muted">
+              <tr>
+                <th className="px-4 py-3 font-medium">Negocio</th>
+                <th className="px-4 py-3 font-medium">Vence</th>
+                <th className="px-4 py-3 font-medium">Estado</th>
+                <th className="px-4 py-3 font-medium">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendientes.map((tenant) => {
+                const luz = semaforo(tenant);
+                return (
+                  <tr key={tenant.id} className="border-t border-line">
+                    <td className="px-4 py-3 font-medium">{tenant.nombreComercial}</td>
+                    <td className="px-4 py-3">{fecha.format(new Date(tenant.fechaVencimiento))}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex rounded-full px-3 py-1 text-sm ${COLOR[luz]}`}>{ETIQUETA[luz]}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button type="button" className="min-h-10 rounded-xl bg-amber px-3 text-sm font-semibold text-ink" onClick={() => onCobrar(tenant)}>
+                        Registrar pago
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div>
+        <h2 className="text-xl font-semibold">Pagos anotados</h2>
+        {historial.length === 0 ? (
+          <p className="mt-2 text-muted">Todavía no hay pagos registrados.</p>
+        ) : (
+          <ul className="mt-3 divide-y divide-line overflow-hidden rounded-3xl border border-line">
+            {historial.map((pago) => (
+              <li key={pago.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                <div>
+                  <p className="font-medium">{pago.nombreComercial}</p>
+                  <p className="text-sm text-muted">
+                    {fecha.format(new Date(pago.fechaPago))} · {pago.medio} · {pago.meses === 12 ? '1 año' : '1 mes'}
+                    {pago.nota ? ` · ${pago.nota}` : ''}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold">{moneda.format(pago.monto)}</p>
+                  <p className="text-sm text-muted">Vigente hasta {fecha.format(new Date(pago.vigenciaHasta))}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PagoModal({
+  tenant,
+  onCerrar,
+  onLista,
+}: {
+  tenant: TenantAdmin;
+  onCerrar: () => void;
+  onLista: () => Promise<void>;
+}) {
+  const [monto, setMonto] = useState('');
+  const [medio, setMedio] = useState<MedioCobro>('Efectivo');
+  const [meses, setMeses] = useState<1 | 12>(1);
+  const [nota, setNota] = useState('');
+  const [guardando, setGuardando] = useState(false);
+  const vigencia = renovarDesde(tenant.fechaVencimiento, meses);
+
+  async function enviar(event: FormEvent) {
+    event.preventDefault();
+    const cantidad = Number(monto);
+    if (!Number.isFinite(cantidad) || cantidad <= 0) {
+      toast.error('Indica el monto recibido.');
+      return;
+    }
+    setGuardando(true);
+    try {
+      await registrarPago(tenant.id, { monto: cantidad, medio, meses, nota });
+      toast.success('Pago registrado');
+      await onLista();
+    } catch (caught) {
+      toast.error(caught instanceof ApiError ? caught.message : 'No se pudo registrar el pago.');
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <Modal titulo="Registrar pago" onCerrar={onCerrar}>
+      <form onSubmit={enviar} className="grid gap-3">
+        <p className="text-sm text-muted">
+          {tenant.nombreComercial}. Anota lo que te pagaron en persona o por transferencia. La sucursal queda activa hasta el {fecha.format(new Date(`${vigencia}T23:59:59.999Z`))}.
+        </p>
+        <Campo id="pago-monto" etiqueta="Monto recibido" value={monto} onChange={setMonto} type="number" required />
+        <div>
+          <p className="text-sm text-muted">Medio</p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {(['Efectivo', 'Transferencia'] as const).map((opcion) => (
+              <button
+                key={opcion}
+                type="button"
+                onClick={() => setMedio(opcion)}
+                className={`min-h-12 rounded-2xl border ${medio === opcion ? 'border-amber bg-amber font-semibold text-ink' : 'border-line'}`}
+              >
+                {opcion}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="text-sm text-muted">Periodo</p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setMeses(1)}
+              className={`min-h-12 rounded-2xl border ${meses === 1 ? 'border-amber bg-amber font-semibold text-ink' : 'border-line'}`}
+            >
+              1 mes
+            </button>
+            <button
+              type="button"
+              onClick={() => setMeses(12)}
+              className={`min-h-12 rounded-2xl border ${meses === 12 ? 'border-amber bg-amber font-semibold text-ink' : 'border-line'}`}
+            >
+              1 año
+            </button>
+          </div>
+        </div>
+        <Campo id="pago-nota" etiqueta="Nota" value={nota} onChange={setNota} />
+        <div className="flex justify-end gap-2">
+          <button type="button" className="min-h-12 rounded-2xl border border-line px-4" onClick={onCerrar}>
+            Cancelar
+          </button>
+          <button type="submit" disabled={guardando} className="min-h-12 rounded-2xl bg-amber px-4 font-semibold text-ink disabled:opacity-50">
+            {guardando ? 'Guardando…' : 'Guardar pago'}
           </button>
         </div>
       </form>

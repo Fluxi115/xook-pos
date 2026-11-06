@@ -66,6 +66,12 @@ public sealed class VentaSyncService
             .Where(t => turnoIds.Contains(t.Id))
             .ToDictionaryAsync(t => t.Id, cancellationToken);
 
+        var tasa = await _db.Tenants
+            .AsNoTracking()
+            .Where(t => t.Id == _tenant.TenantId)
+            .Select(t => t.TasaImpuesto)
+            .FirstOrDefaultAsync(cancellationToken);
+
         var catalogo = await _db.Productos
             .AsNoTracking()
             .Include(p => p.Grupos)
@@ -98,7 +104,7 @@ public sealed class VentaSyncService
             List<LineaCalculada>? lineas = null;
             if (error is null)
             {
-                (lineas, error) = CalcularLineas(dto, catalogo);
+                (lineas, error) = CalcularLineas(dto, catalogo, tasa);
             }
 
             if (error is null && (foliosExistentes.Contains(folio) || !foliosDelLote.Add(folio)))
@@ -117,7 +123,7 @@ public sealed class VentaSyncService
                 continue;
             }
 
-            nuevas.Add(Mapear(dto, folio, lineas));
+            nuevas.Add(Mapear(dto, folio, lineas, tasa));
             idsExistentes.Add(dto.Id);
         }
 
@@ -218,7 +224,8 @@ public sealed class VentaSyncService
 
     private static (List<LineaCalculada>? Lineas, string? Error) CalcularLineas(
         VentaSyncDto dto,
-        Dictionary<Guid, Producto> catalogo)
+        Dictionary<Guid, Producto> catalogo,
+        decimal tasa)
     {
         var lineas = new List<LineaCalculada>();
         decimal subtotal = 0;
@@ -270,7 +277,8 @@ public sealed class VentaSyncService
         }
 
         subtotal = Redondear(subtotal);
-        if (!Casi(dto.Subtotal, subtotal) || !Casi(dto.Total, subtotal))
+        var total = TotalConImpuesto(subtotal, tasa);
+        if (!Casi(dto.Subtotal, subtotal) || !Casi(dto.Total, total))
         {
             return (null, "El total de la venta no cuadra con el catálogo.");
         }
@@ -278,7 +286,7 @@ public sealed class VentaSyncService
         return (lineas, null);
     }
 
-    private Venta Mapear(VentaSyncDto dto, string folio, List<LineaCalculada> lineas)
+    private Venta Mapear(VentaSyncDto dto, string folio, List<LineaCalculada> lineas, decimal tasa)
     {
         var fecha = dto.FechaHora.Kind == DateTimeKind.Utc
             ? dto.FechaHora
@@ -293,7 +301,7 @@ public sealed class VentaSyncService
             FolioVenta = folio,
             FechaHora = fecha,
             Subtotal = subtotal,
-            Total = subtotal,
+            Total = TotalConImpuesto(subtotal, tasa),
             MetodoPago = dto.MetodoPago,
             EstadoSincronizacion = EstadoSincronizacion.Sincronizado,
             Detalles = lineas.Select(linea => new VentaDetalle
@@ -309,6 +317,9 @@ public sealed class VentaSyncService
             }).ToList()
         };
     }
+
+    private static decimal TotalConImpuesto(decimal subtotal, decimal tasa) =>
+        Redondear(subtotal + Redondear(subtotal * tasa));
 
     private static decimal Redondear(decimal valor) => Math.Round(valor, 2, MidpointRounding.AwayFromZero);
 

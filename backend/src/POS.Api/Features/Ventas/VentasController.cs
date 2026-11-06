@@ -4,7 +4,7 @@ using POS.Application.Ventas;
 
 namespace POS.Api.Features.Ventas;
 
-[Authorize]
+[Authorize(Roles = "Cajero,AdminSucursal")]
 [ApiController]
 [Route("api/v1/ventas")]
 public sealed class VentasController : ControllerBase

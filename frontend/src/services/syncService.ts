@@ -116,7 +116,7 @@ export async function descargarCatalogo(): Promise<void> {
   });
 }
 
-export async function cotizarDesdeCatalogo(lineas: LineaPorCobrar[]) {
+export async function cotizarDesdeCatalogo(lineas: LineaPorCobrar[], tasa = 0) {
   if (lineas.length === 0) throw new Error('El pedido está vacío.');
   const items: VentaItemPayload[] = [];
 
@@ -148,7 +148,8 @@ export async function cotizarDesdeCatalogo(lineas: LineaPorCobrar[]) {
   }
 
   const subtotal = redondear(items.reduce((suma, item) => suma + item.totalLinea, 0));
-  return { items, subtotal, total: subtotal };
+  const impuestos = redondear(subtotal * tasa);
+  return { items, subtotal, total: redondear(subtotal + impuestos) };
 }
 
 export async function registrarVenta(entrada: {
@@ -163,7 +164,8 @@ export async function registrarVenta(entrada: {
   const turno = leerTurnoLocal();
   if (!turno?.id) throw new Error('Abre un turno de caja antes de vender.');
 
-  const cotizacion = await cotizarDesdeCatalogo(entrada.lineas);
+  const sucursal = (await db.tenantInfo.toArray())[0];
+  const cotizacion = await cotizarDesdeCatalogo(entrada.lineas, sucursal?.tasaImpuesto ?? 0);
   const payload: VentaPayload = {
     id: entrada.id,
     folioVenta: entrada.folioVenta,

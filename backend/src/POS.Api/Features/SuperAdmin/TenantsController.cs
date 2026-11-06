@@ -61,4 +61,22 @@ public sealed class TenantsController : ControllerBase
 
         return Ok(resultado.Tenant);
     }
+
+    [HttpGet("/api/v1/superadmin/pagos")]
+    public async Task<IActionResult> Pagos(CancellationToken cancellationToken)
+    {
+        return Ok(await _tenants.ListarPagosAsync(cancellationToken));
+    }
+
+    [HttpPost("{id:guid}/pagos")]
+    public async Task<IActionResult> RegistrarPago(Guid id, [FromBody] RegistrarPagoRequest request, CancellationToken cancellationToken)
+    {
+        var resultado = await _tenants.RegistrarPagoAsync(id, request, cancellationToken);
+        if (!resultado.Exitoso)
+        {
+            return StatusCode(resultado.StatusCode, new { mensaje = resultado.Mensaje });
+        }
+
+        return Ok(resultado.Pago);
+    }
 }

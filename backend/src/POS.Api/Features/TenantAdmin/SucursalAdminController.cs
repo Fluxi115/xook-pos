@@ -5,7 +5,7 @@ using POS.Application.TenantAdmin;
 
 namespace POS.Api.Features.TenantAdmin;
 
-[Authorize(Roles = "AdminSucursal,SuperAdmin")]
+[Authorize(Roles = "AdminSucursal")]
 [ApiController]
 [Route("api/v1/tenant-admin")]
 public sealed class SucursalAdminController : ControllerBase
@@ -42,6 +42,30 @@ public sealed class SucursalAdminController : ControllerBase
     public async Task<IActionResult> Modificadores(CancellationToken cancellationToken)
     {
         return Ok(await _tienda.ListarModificadoresAsync(cancellationToken));
+    }
+
+    [HttpGet("reportes")]
+    public async Task<IActionResult> Reportes([FromQuery] string? periodo, CancellationToken cancellationToken)
+    {
+        return Responder(await _tienda.ReporteAsync(periodo, cancellationToken));
+    }
+
+    [HttpPost("ventas/{id:guid}/cancelar")]
+    public async Task<IActionResult> Cancelar(Guid id, [FromBody] CancelarVentaRequest request, CancellationToken cancellationToken)
+    {
+        return Responder(await _tienda.CancelarVentaAsync(id, request, cancellationToken));
+    }
+
+    [HttpGet("ticket")]
+    public async Task<IActionResult> Ticket(CancellationToken cancellationToken)
+    {
+        return Responder(await _tienda.TicketAsync(cancellationToken));
+    }
+
+    [HttpPut("ticket")]
+    public async Task<IActionResult> GuardarTicket([FromBody] TicketSucursalDto request, CancellationToken cancellationToken)
+    {
+        return Responder(await _tienda.GuardarTicketAsync(request, cancellationToken));
     }
 
     [HttpGet("cortes")]

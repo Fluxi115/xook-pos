@@ -86,3 +86,31 @@ export function actualizarSuscripcion(id: string, body: { fechaVencimiento: stri
     body: JSON.stringify(body),
   }).then((response) => leerJson<TenantAdmin>(response));
 }
+
+export type MedioCobro = 'Efectivo' | 'Transferencia';
+
+export interface PagoSuscripcion {
+  id: string;
+  tenantId: string;
+  nombreComercial: string;
+  monto: number;
+  medio: MedioCobro;
+  fechaPago: string;
+  meses: number;
+  vigenciaHasta: string;
+  nota: string | null;
+}
+
+export function listarPagos() {
+  return apiFetch('/api/v1/superadmin/pagos').then((response) => leerJson<PagoSuscripcion[]>(response));
+}
+
+export function registrarPago(
+  id: string,
+  body: { monto: number; medio: MedioCobro; meses: 1 | 12; nota: string },
+) {
+  return apiFetch(`/api/v1/superadmin/tenants/${id}/pagos`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  }).then((response) => leerJson<PagoSuscripcion>(response));
+}

@@ -48,6 +48,8 @@ public sealed class AppDbContext : DbContext, IAppDbContext
 
     public DbSet<CorteCaja> CortesCaja => Set<CorteCaja>();
 
+    public DbSet<PagoSuscripcion> PagosSuscripcion => Set<PagoSuscripcion>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using POS.Application.Abstractions;
+using POS.Application.Caja;
 using POS.Domain.Entities;
 using POS.Domain.Enums;
 
@@ -10,12 +11,14 @@ public sealed class TenantStoreService
     private readonly IAppDbContext _db;
     private readonly ITenantProvider _tenant;
     private readonly IPasswordHasher _hasher;
+    private readonly CajaTurnoService _caja;
 
-    public TenantStoreService(IAppDbContext db, ITenantProvider tenant, IPasswordHasher hasher)
+    public TenantStoreService(IAppDbContext db, ITenantProvider tenant, IPasswordHasher hasher, CajaTurnoService caja)
     {
         _db = db;
         _tenant = tenant;
         _hasher = hasher;
+        _caja = caja;
     }
 
     public async Task<Resultado<DashboardDto>> MetricasAsync(CancellationToken cancellationToken)
@@ -39,7 +42,7 @@ public sealed class TenantStoreService
         var (inicioUtc, finUtc) = DiaActualUtc();
         var delDia = await _db.Ventas
             .AsNoTracking()
-            .Where(v => v.FechaHora >= inicioUtc && v.FechaHora < finUtc)
+            .Where(v => !v.Cancelada && v.FechaHora >= inicioUtc && v.FechaHora < finUtc)
             .Select(v => new { v.Total, v.MetodoPago })
             .ToListAsync(cancellationToken);
 
@@ -54,7 +57,10 @@ public sealed class TenantStoreService
                 FechaHora = v.FechaHora,
                 Total = v.Total,
                 MetodoPago = v.MetodoPago.ToString(),
-                Cajero = v.Usuario.Nombre
+                Cajero = v.Usuario.Nombre,
+                Cancelada = v.Cancelada,
+                MotivoCancelacion = v.MotivoCancelacion,
+                FechaCancelacion = v.FechaCancelacion
             })
             .ToListAsync(cancellationToken);
 
@@ -351,6 +357,198 @@ public sealed class TenantStoreService
             .ToList()
     };
 
+    public async Task<Resultado<ReporteDto>> ReporteAsync(string? periodo, CancellationToken cancellationToken)
+    {
+        var clave = (periodo ?? "semana").Trim().ToLowerInvariant();
+        if (clave is not ("dia" or "semana" or "mes"))
+        {
+            return Resultado<ReporteDto>.Fail(400, "El periodo debe ser día, semana o mes.");
+        }
+
+        var (inicio, fin) = Rango(clave);
+        var movimientos = await _db.Ventas
+            .AsNoTracking()
+            .Where(v => v.FechaHora >= inicio && v.FechaHora < fin)
+            .OrderByDescending(v => v.FechaHora)
+            .Select(v => new VentaResumenDto
+            {
+                Id = v.Id,
+                FolioVenta = v.FolioVenta,
+                FechaHora = v.FechaHora,
+                Total = v.Total,
+                MetodoPago = v.MetodoPago.ToString(),
+                Cajero = v.Usuario.Nombre,
+                Cancelada = v.Cancelada,
+                MotivoCancelacion = v.MotivoCancelacion,
+                FechaCancelacion = v.FechaCancelacion
+            })
+            .ToListAsync(cancellationToken);
+
+        var detalles = await _db.VentaDetalles
+            .AsNoTracking()
+            .Where(d => !d.Venta.Cancelada && d.Venta.FechaHora >= inicio && d.Venta.FechaHora < fin)
+            .Select(d => new { d.NombreProducto, d.Cantidad, d.TotalLinea })
+            .ToListAsync(cancellationToken);
+
+        var productos = detalles
+            .GroupBy(d => d.NombreProducto)
+            .Select(grupo => new ProductoReporteDto
+            {
+                Nombre = grupo.Key,
+                Cantidad = grupo.Sum(d => d.Cantidad),
+                Total = grupo.Sum(d => d.TotalLinea)
+            })
+            .OrderByDescending(p => p.Cantidad)
+            .ThenBy(p => p.Nombre)
+            .Take(8)
+            .ToList();
+
+        decimal ventas = 0, efectivo = 0, tarjeta = 0, transferencia = 0;
+        var ordenes = 0;
+        foreach (var venta in movimientos.Where(v => !v.Cancelada))
+        {
+            ordenes++;
+            ventas += venta.Total;
+            switch (venta.MetodoPago)
+            {
+                case nameof(MetodoPago.Efectivo):
+                    efectivo += venta.Total;
+                    break;
+                case nameof(MetodoPago.Tarjeta):
+                    tarjeta += venta.Total;
+                    break;
+                case nameof(MetodoPago.Transferencia):
+                    transferencia += venta.Total;
+                    break;
+            }
+        }
+
+        return Resultado<ReporteDto>.Ok(new ReporteDto
+        {
+            Periodo = clave,
+            Desde = inicio,
+            Hasta = fin,
+            Ventas = ventas,
+            Ordenes = ordenes,
+            TicketPromedio = ordenes == 0 ? 0 : decimal.Round(ventas / ordenes, 2),
+            Efectivo = efectivo,
+            Tarjeta = tarjeta,
+            Transferencia = transferencia,
+            Productos = productos,
+            Movimientos = movimientos
+        });
+    }
+
+    public async Task<Resultado<VentaResumenDto>> CancelarVentaAsync(Guid id, CancelarVentaRequest request, CancellationToken cancellationToken)
+    {
+        var motivo = request.Motivo?.Trim() ?? string.Empty;
+        if (motivo.Length < 3 || motivo.Length > 200)
+        {
+            return Resultado<VentaResumenDto>.Fail(400, "Escribe el motivo de la anulación, de 3 a 200 caracteres.");
+        }
+
+        var venta = await _db.Ventas.FirstOrDefaultAsync(v => v.Id == id, cancellationToken);
+        if (venta is null)
+        {
+            return Resultado<VentaResumenDto>.Fail(404, "Venta no encontrada.");
+        }
+
+        if (venta.Cancelada)
+        {
+            return Resultado<VentaResumenDto>.Fail(400, "Esa venta ya está anulada.");
+        }
+
+        venta.Cancelada = true;
+        venta.MotivoCancelacion = motivo;
+        venta.FechaCancelacion = DateTime.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+        if (venta.TurnoCajaId is Guid turnoId)
+        {
+            await _caja.RefrescarCortesAsync([turnoId], cancellationToken);
+        }
+
+        var cajero = await _db.Usuarios
+            .AsNoTracking()
+            .Where(u => u.Id == venta.UsuarioId)
+            .Select(u => u.Nombre)
+            .FirstOrDefaultAsync(cancellationToken) ?? "Cajero";
+
+        return Resultado<VentaResumenDto>.Ok(new VentaResumenDto
+        {
+            Id = venta.Id,
+            FolioVenta = venta.FolioVenta,
+            FechaHora = venta.FechaHora,
+            Total = venta.Total,
+            MetodoPago = venta.MetodoPago.ToString(),
+            Cajero = cajero,
+            Cancelada = true,
+            MotivoCancelacion = venta.MotivoCancelacion,
+            FechaCancelacion = venta.FechaCancelacion
+        });
+    }
+
+    public async Task<Resultado<TicketSucursalDto>> TicketAsync(CancellationToken cancellationToken)
+    {
+        var ticket = await _db.Tenants
+            .AsNoTracking()
+            .Where(t => t.Id == _tenant.TenantId)
+            .Select(t => new TicketSucursalDto
+            {
+                Direccion = t.Direccion,
+                Telefono = t.Telefono,
+                MensajeTicket = t.MensajeTicket,
+                TasaImpuesto = t.TasaImpuesto
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (ticket is null)
+        {
+            return Resultado<TicketSucursalDto>.Fail(404, "Sucursal no encontrada.");
+        }
+
+        return Resultado<TicketSucursalDto>.Ok(ticket);
+    }
+
+    public async Task<Resultado<TicketSucursalDto>> GuardarTicketAsync(TicketSucursalDto request, CancellationToken cancellationToken)
+    {
+        if (request.TasaImpuesto < 0 || request.TasaImpuesto > 1)
+        {
+            return Resultado<TicketSucursalDto>.Fail(400, "El impuesto debe estar entre 0 y 100 por ciento.");
+        }
+
+        var sucursal = await _db.Tenants.FirstOrDefaultAsync(t => t.Id == _tenant.TenantId, cancellationToken);
+        if (sucursal is null)
+        {
+            return Resultado<TicketSucursalDto>.Fail(404, "Sucursal no encontrada.");
+        }
+
+        var direccion = Limpiar(request.Direccion);
+        var telefono = Limpiar(request.Telefono);
+        var mensaje = Limpiar(request.MensajeTicket);
+        if (direccion is { Length: > 200 } || mensaje is { Length: > 200 })
+        {
+            return Resultado<TicketSucursalDto>.Fail(400, "La dirección y el mensaje admiten hasta 200 caracteres.");
+        }
+
+        if (telefono is { Length: > 30 })
+        {
+            return Resultado<TicketSucursalDto>.Fail(400, "El teléfono admite hasta 30 caracteres.");
+        }
+
+        sucursal.Direccion = direccion;
+        sucursal.Telefono = telefono;
+        sucursal.MensajeTicket = mensaje;
+        sucursal.TasaImpuesto = decimal.Round(request.TasaImpuesto, 4);
+        await _db.SaveChangesAsync(cancellationToken);
+        return Resultado<TicketSucursalDto>.Ok(new TicketSucursalDto
+        {
+            Direccion = sucursal.Direccion,
+            Telefono = sucursal.Telefono,
+            MensajeTicket = sucursal.MensajeTicket,
+            TasaImpuesto = sucursal.TasaImpuesto
+        });
+    }
+
     private static bool FotoValida(string? foto)
     {
         if (foto is null)
@@ -374,19 +572,40 @@ public sealed class TenantStoreService
 
     private static (DateTime InicioUtc, DateTime FinUtc) DiaActualUtc()
     {
-        TimeZoneInfo zona;
+        var zona = Zona();
+        var ahoraLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zona);
+        return RangoLocal(ahoraLocal.Date, ahoraLocal.Date.AddDays(1), zona);
+    }
+
+    private static (DateTime InicioUtc, DateTime FinUtc) Rango(string periodo)
+    {
+        var zona = Zona();
+        var hoy = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zona).Date;
+        var inicio = periodo switch
+        {
+            "dia" => hoy,
+            "mes" => new DateTime(hoy.Year, hoy.Month, 1),
+            _ => hoy.AddDays(-(((int)hoy.DayOfWeek + 6) % 7))
+        };
+        return RangoLocal(inicio, hoy.AddDays(1), zona);
+    }
+
+    private static (DateTime InicioUtc, DateTime FinUtc) RangoLocal(DateTime inicioLocal, DateTime finLocal, TimeZoneInfo zona)
+    {
+        var inicio = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(inicioLocal, DateTimeKind.Unspecified), zona);
+        var fin = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(finLocal, DateTimeKind.Unspecified), zona);
+        return (DateTime.SpecifyKind(inicio, DateTimeKind.Utc), DateTime.SpecifyKind(fin, DateTimeKind.Utc));
+    }
+
+    private static TimeZoneInfo Zona()
+    {
         try
         {
-            zona = TimeZoneInfo.FindSystemTimeZoneById("America/Mexico_City");
+            return TimeZoneInfo.FindSystemTimeZoneById("America/Mexico_City");
         }
         catch (TimeZoneNotFoundException)
         {
-            zona = TimeZoneInfo.Utc;
+            return TimeZoneInfo.Utc;
         }
-
-        var ahoraLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, zona);
-        var inicioLocal = DateTime.SpecifyKind(ahoraLocal.Date, DateTimeKind.Unspecified);
-        var inicioUtc = TimeZoneInfo.ConvertTimeToUtc(inicioLocal, zona);
-        return (DateTime.SpecifyKind(inicioUtc, DateTimeKind.Utc), DateTime.SpecifyKind(inicioUtc.AddDays(1), DateTimeKind.Utc));
     }
 }

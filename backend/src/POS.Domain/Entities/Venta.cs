@@ -23,6 +23,12 @@ public class Venta : TenantEntity
 
     public EstadoSincronizacion EstadoSincronizacion { get; set; } = EstadoSincronizacion.Pendiente;
 
+    public bool Cancelada { get; set; }
+
+    public string? MotivoCancelacion { get; set; }
+
+    public DateTime? FechaCancelacion { get; set; }
+
     public Usuario Usuario { get; set; } = null!;
 
     public ICollection<VentaDetalle> Detalles { get; set; } = new List<VentaDetalle>();

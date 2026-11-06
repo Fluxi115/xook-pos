@@ -80,12 +80,13 @@ export function PosView({ sesion, enLinea, onCerrarSesion }: PosViewProps) {
     return (productos ?? []).filter((producto) => {
       const coincideCategoria = categoriaId === 'todas' || producto.categoriaId === categoriaId;
       const coincideBusqueda = consulta.length === 0 || normalizar(producto.nombre).includes(consulta);
-      return coincideCategoria && coincideBusqueda;
+      return producto.disponible && coincideCategoria && coincideBusqueda;
     });
   }, [productos, categoriaId, consulta]);
 
   const piezas = piezasDe(lineas);
-  const { total } = totalesDe(lineas);
+  const tasa = tenant?.tasaImpuesto ?? 0;
+  const { total } = totalesDe(lineas, tasa);
   const negocio = tenant?.nombreComercial ?? 'Sucursal';
 
   function agregar(producto: ProductoLocal, modificadores: ModificadorSeleccionado[], precioUnitario: number) {
@@ -257,7 +258,9 @@ export function PosView({ sesion, enLinea, onCerrarSesion }: PosViewProps) {
             {cargandoMenu || actualizando ? (
               <EsqueletoMenu />
             ) : visibles.length === 0 ? (
-              <p className="py-16 text-center text-muted">No hay productos para esta búsqueda.</p>
+              <p className="py-16 text-center text-muted">
+                {consulta ? 'No hay productos para esta búsqueda.' : 'No hay productos disponibles.'}
+              </p>
             ) : (
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
                 {visibles.map((producto) => (
@@ -292,6 +295,7 @@ export function PosView({ sesion, enLinea, onCerrarSesion }: PosViewProps) {
         >
           <CartPanel
               lineas={lineas}
+              tasa={tasa}
               onCambiarCantidad={cambiarCantidad}
               onQuitar={(key) => setLineas((actuales) => actuales.filter((linea) => linea.key !== key))}
               onVaciar={() => setLineas([])}
@@ -328,6 +332,10 @@ export function PosView({ sesion, enLinea, onCerrarSesion }: PosViewProps) {
           lineas={lineas}
           nombreNegocio={negocio}
           cajero={sesion.nombre}
+          tasa={tasa}
+          direccion={tenant?.direccion}
+          telefono={tenant?.telefono}
+          mensajeTicket={tenant?.mensajeTicket}
           onCerrar={() => setCobrando(false)}
           onVentaRegistrada={() => {
             setLineas([]);

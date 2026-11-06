@@ -19,6 +19,14 @@ public sealed class TenantInfoDto
 
     public string? LogoUrl { get; set; }
 
+    public string? Telefono { get; set; }
+
+    public string? Direccion { get; set; }
+
+    public string? MensajeTicket { get; set; }
+
+    public decimal TasaImpuesto { get; set; }
+
     public string Estado { get; set; } = string.Empty;
 
     public DateTime FechaVencimiento { get; set; }

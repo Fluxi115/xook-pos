@@ -49,6 +49,7 @@ function RutaInicio() {
 function RutaCaja() {
   const { sesion, setSesion, enLinea } = useAuth();
   if (!sesion) return <Navigate to="/" replace />;
+  if (sesion.rol === 'SuperAdmin') return <Navigate to="/superadmin" replace />;
   return <PosView sesion={sesion} enLinea={enLinea} onCerrarSesion={() => setSesion(null)} />;
 }
 
@@ -62,6 +63,6 @@ function RutaSuperAdmin() {
 function RutaAdmin() {
   const { sesion, setSesion } = useAuth();
   if (!sesion) return <Navigate to="/" replace />;
-  if (sesion.rol !== 'AdminSucursal' && sesion.rol !== 'SuperAdmin') return <Navigate to="/caja" replace />;
+  if (sesion.rol !== 'AdminSucursal') return <Navigate to={rutaDeRol(sesion.rol)} replace />;
   return <AdminPage onCerrarSesion={() => setSesion(null)} />;
 }

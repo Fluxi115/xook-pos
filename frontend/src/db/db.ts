@@ -11,6 +11,10 @@ export interface TenantInfo {
   logoUrl: string | null;
   estado: string;
   fechaVencimiento: string;
+  telefono?: string | null;
+  direccion?: string | null;
+  mensajeTicket?: string | null;
+  tasaImpuesto?: number;
 }
 
 export interface CategoriaLocal {

@@ -4,7 +4,7 @@ using POS.Application.Catalogo;
 
 namespace POS.Api.Features.Catalogo;
 
-[Authorize]
+[Authorize(Roles = "Cajero,AdminSucursal")]
 [ApiController]
 [Route("api/v1/catalogo")]
 public sealed class CatalogoController : ControllerBase
