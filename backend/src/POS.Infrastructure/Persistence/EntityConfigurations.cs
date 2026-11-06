@@ -13,7 +13,7 @@ internal sealed class TenantConfiguration : IEntityTypeConfiguration<Tenant>
         builder.Property(t => t.RucRfc).HasMaxLength(20).IsRequired();
         builder.HasIndex(t => t.RucRfc).IsUnique();
         builder.Property(t => t.Telefono).HasMaxLength(30);
-        builder.Property(t => t.LogoUrl).HasMaxLength(500);
+        builder.Property(t => t.LogoUrl).HasColumnType("text");
         builder.Property(t => t.Estado).HasConversion<string>().HasMaxLength(20);
     }
 }
@@ -57,7 +57,7 @@ internal sealed class ProductoConfiguration : IEntityTypeConfiguration<Producto>
         builder.ToTable("productos");
         builder.Property(p => p.Nombre).HasMaxLength(160).IsRequired();
         builder.Property(p => p.Descripcion).HasMaxLength(500);
-        builder.Property(p => p.FotoUrl).HasMaxLength(500);
+        builder.Property(p => p.FotoUrl).HasColumnType("text");
         builder.Property(p => p.PrecioBase).HasPrecision(18, 2);
         builder.HasIndex(p => new { p.TenantId, p.CategoriaId });
         builder.HasOne(p => p.Categoria)

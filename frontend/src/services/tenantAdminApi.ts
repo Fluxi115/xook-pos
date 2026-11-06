@@ -2,6 +2,7 @@ import { ApiError, apiFetch, leerMensaje } from './apiClient';
 
 export interface DashboardAdmin {
   nombreComercial: string;
+  logoUrl: string | null;
   ventasDelDia: number;
   ordenesDelDia: number;
   ticketPromedio: number;

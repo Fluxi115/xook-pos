@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { MARCA } from '../../marca';
+import { LogoEmpresa } from '../LogoEmpresa';
+import { reducirLogo } from '../logo';
 import { moneda } from '../pos/pedido';
 import { VentasRechazadas } from '../pos/VentasRechazadas';
 import { ApiError, cerrarSesion } from '../../services/apiClient';
@@ -106,8 +108,13 @@ export function AdminPage({ onCerrarSesion }: AdminPageProps) {
   return (
     <div className="min-h-dvh bg-ink md:grid md:grid-cols-[240px_1fr]">
       <aside className="border-b border-line px-4 py-4 md:border-r md:border-b-0 md:px-5 md:py-6">
-        <p className="text-xs font-semibold tracking-[0.16em] text-amber">{MARCA}</p>
-        <h1 className="mt-1 text-xl font-semibold">{negocio}</h1>
+        <div className="flex items-center gap-3">
+          <LogoEmpresa src={metricas?.logoUrl} nombre={negocio} />
+          <div>
+            <p className="text-xs font-semibold tracking-[0.16em] text-amber">{MARCA}</p>
+            <h1 className="mt-1 text-xl font-semibold">{negocio}</h1>
+          </div>
+        </div>
         <nav className="mt-4 flex gap-2 md:mt-8 md:flex-col">
           <Tab activo={seccion === 'resumen'} onClick={() => setSeccion('resumen')}>
             Resumen
@@ -298,8 +305,9 @@ function Menu({
       ) : (
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {visibles.map((producto) => (
-            <article key={producto.id} className="rounded-3xl border border-line bg-panel p-4">
-              <div className="flex items-start justify-between gap-3">
+            <article key={producto.id} className="overflow-hidden rounded-3xl border border-line bg-panel">
+              {producto.fotoUrl && <img src={producto.fotoUrl} alt="" className="h-36 w-full object-cover" />}
+              <div className="flex items-start justify-between gap-3 p-4 pb-0">
                 <div>
                   <p className="font-medium">{producto.nombre}</p>
                   <p className="text-sm text-muted">{producto.categoriaNombre}</p>
@@ -308,11 +316,11 @@ function Menu({
                   {producto.disponible ? 'Disponible' : 'Agotado'}
                 </span>
               </div>
-              <p className="mt-3 text-lg font-semibold text-amber">{moneda.format(producto.precioBase)}</p>
+              <p className="mt-3 px-4 text-lg font-semibold text-amber">{moneda.format(producto.precioBase)}</p>
               {producto.grupos.length > 0 && (
-                <p className="mt-1 text-sm text-muted">{producto.grupos.map((grupo) => grupo.nombre).join(', ')}</p>
+                <p className="mt-1 px-4 text-sm text-muted">{producto.grupos.map((grupo) => grupo.nombre).join(', ')}</p>
               )}
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="mt-4 flex flex-wrap gap-2 p-4 pt-0">
                 <button type="button" className="min-h-10 rounded-xl border border-line px-3 text-sm" onClick={() => onEditar(producto)}>
                   Editar
                 </button>
@@ -496,7 +504,7 @@ function ProductoModal({
           </select>
         </div>
         <Campo id="prod-precio" etiqueta="Precio base" value={precio} onChange={setPrecio} type="number" required />
-        <Campo id="prod-foto" etiqueta="Foto (URL)" value={foto} onChange={setFoto} />
+        <FotoProducto valor={foto} onChange={setFoto} />
         <label className="flex min-h-11 items-center gap-3 text-sm">
           <input type="checkbox" checked={disponible} onChange={(event) => setDisponible(event.target.checked)} />
           Disponible para la venta
@@ -585,6 +593,66 @@ function UsuarioModal({ onCerrar, onGuardado }: { onCerrar: () => void; onGuarda
         </div>
       </form>
     </Modal>
+  );
+}
+
+function FotoProducto({ valor, onChange }: { valor: string; onChange: (valor: string) => void }) {
+  const [leyendo, setLeyendo] = useState(false);
+
+  async function elegir(archivo: File | undefined) {
+    if (!archivo) return;
+    if (!archivo.type.startsWith('image/')) {
+      toast.error('Elige una imagen PNG, JPG o WebP.');
+      return;
+    }
+    setLeyendo(true);
+    try {
+      onChange(await reducirLogo(archivo, 720));
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : 'No se pudo leer la foto.');
+    } finally {
+      setLeyendo(false);
+    }
+  }
+
+  return (
+    <div>
+      <p className="text-sm text-muted">Foto del producto</p>
+      {valor && <img src={valor} alt="" className="mt-2 h-36 w-full rounded-2xl object-cover" />}
+      <div className="mt-2 flex flex-wrap gap-2">
+        <label className="inline-flex min-h-11 cursor-pointer items-center rounded-2xl bg-amber px-4 font-semibold text-ink">
+          Tomar foto
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="sr-only"
+            onChange={(event) => {
+              void elegir(event.target.files?.[0]);
+              event.target.value = '';
+            }}
+          />
+        </label>
+        <label className="inline-flex min-h-11 cursor-pointer items-center rounded-2xl border border-line px-4">
+          Cargar imagen
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="sr-only"
+            onChange={(event) => {
+              void elegir(event.target.files?.[0]);
+              event.target.value = '';
+            }}
+          />
+        </label>
+        {valor && (
+          <button type="button" className="min-h-11 rounded-2xl border border-line px-4 text-sm" onClick={() => onChange('')}>
+            Quitar foto
+          </button>
+        )}
+      </div>
+      {leyendo && <p className="mt-2 text-sm text-muted">Preparando foto…</p>}
+    </div>
   );
 }
 

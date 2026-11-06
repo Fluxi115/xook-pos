@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { MARCA } from '../../marca';
+import { LogoEmpresa } from '../LogoEmpresa';
+import { reducirLogo } from '../logo';
 import { ApiError, cerrarSesion } from '../../services/apiClient';
 import {
   actualizarSuscripcion,
@@ -162,7 +164,12 @@ export function SuperAdminPage({ onCerrarSesion }: SuperAdminPageProps) {
                   const luz = semaforo(tenant);
                   return (
                     <tr key={tenant.id} className="border-t border-line">
-                      <td className="px-4 py-3 font-medium">{tenant.nombreComercial}</td>
+                      <td className="px-4 py-3 font-medium">
+                        <div className="flex items-center gap-3">
+                          <LogoEmpresa src={tenant.logoUrl} nombre={tenant.nombreComercial} className="h-10 w-10" />
+                          {tenant.nombreComercial}
+                        </div>
+                      </td>
                       <td className="px-4 py-3">{tenant.rucRfc}</td>
                       <td className="px-4 py-3">{tenant.telefono || '—'}</td>
                       <td className="px-4 py-3">{tenant.totalUsuarios}</td>
@@ -273,7 +280,7 @@ function AltaModal({ onCerrar, onLista }: { onCerrar: () => void; onLista: () =>
         <Campo id="alta-nombre" etiqueta="Nombre comercial" value={nombre} onChange={setNombre} required />
         <Campo id="alta-rfc" etiqueta="RFC / RUC" value={rfc} onChange={setRfc} required />
         <Campo id="alta-tel" etiqueta="Teléfono" value={telefono} onChange={setTelefono} />
-        <Campo id="alta-logo" etiqueta="Logo (URL)" value={logo} onChange={setLogo} />
+        <LogoCampo id="alta-logo" valor={logo} onChange={setLogo} />
         <Campo id="alta-admin" etiqueta="Nombre del administrador" value={adminNombre} onChange={setAdminNombre} required />
         <Campo id="alta-user" etiqueta="Usuario" value={username} onChange={setUsername} required />
         <Campo id="alta-pass" etiqueta="Contraseña" value={password} onChange={setPassword} type="password" required />
@@ -343,7 +350,7 @@ function EditarModal({
         <Campo id="edit-nombre" etiqueta="Nombre comercial" value={nombre} onChange={setNombre} required />
         <Campo id="edit-rfc" etiqueta="RFC / RUC" value={rfc} onChange={setRfc} required />
         <Campo id="edit-tel" etiqueta="Teléfono" value={telefono} onChange={setTelefono} />
-        <Campo id="edit-logo" etiqueta="Logo (URL)" value={logo} onChange={setLogo} />
+        <LogoCampo id="edit-logo" valor={logo} onChange={setLogo} />
         <div className="flex justify-end gap-2">
           <button type="button" className="min-h-12 rounded-2xl border border-line px-4" onClick={onCerrar}>
             Cancelar
@@ -431,6 +438,53 @@ function Modal({ titulo, onCerrar, children }: { titulo: string; onCerrar: () =>
           </button>
         </div>
         {children}
+      </div>
+    </div>
+  );
+}
+
+function LogoCampo({ id, valor, onChange }: { id: string; valor: string; onChange: (valor: string) => void }) {
+  const [leyendo, setLeyendo] = useState(false);
+
+  async function elegir(archivo: File | undefined) {
+    if (!archivo) return;
+    if (!archivo.type.startsWith('image/')) {
+      toast.error('Elige una imagen PNG, JPG o WebP.');
+      return;
+    }
+    setLeyendo(true);
+    try {
+      onChange(await reducirLogo(archivo));
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : 'No se pudo leer la imagen.');
+    } finally {
+      setLeyendo(false);
+    }
+  }
+
+  return (
+    <div className="sm:col-span-2">
+      <label className="text-sm text-muted" htmlFor={id}>
+        Logo de la empresa
+      </label>
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <LogoEmpresa src={valor} nombre="la empresa" className="h-16 w-16" />
+        <input
+          id={id}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          onChange={(event) => {
+            void elegir(event.target.files?.[0]);
+            event.target.value = '';
+          }}
+          className="max-w-full text-sm file:mr-3 file:min-h-11 file:rounded-2xl file:border-0 file:bg-amber file:px-4 file:font-semibold file:text-ink"
+        />
+        {valor && (
+          <button type="button" className="min-h-11 rounded-2xl border border-line px-4 text-sm" onClick={() => onChange('')}>
+            Quitar logo
+          </button>
+        )}
+        {leyendo && <span className="text-sm text-muted">Preparando imagen…</span>}
       </div>
     </div>
   );

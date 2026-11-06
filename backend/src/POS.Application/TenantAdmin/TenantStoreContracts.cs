@@ -6,6 +6,8 @@ public sealed class DashboardDto
 {
     public string NombreComercial { get; set; } = string.Empty;
 
+    public string? LogoUrl { get; set; }
+
     public decimal VentasDelDia { get; set; }
 
     public int OrdenesDelDia { get; set; }

@@ -40,7 +40,10 @@ public sealed class TenantAdminService
         var adminNombre = request.AdminNombre.Trim();
         var username = request.AdminUsername.Trim().ToLowerInvariant();
         var telefono = Limpiar(request.Telefono);
-        var logo = Limpiar(request.LogoUrl);
+        if (!LogoValido(request.LogoUrl, out var logo, out var errorLogo))
+        {
+            return OperacionTenant.Fail(400, errorLogo);
+        }
 
         if (nombre.Length == 0 || rfc.Length == 0 || adminNombre.Length == 0 || username.Length < 3 || string.IsNullOrWhiteSpace(request.AdminPassword))
         {
@@ -119,8 +122,13 @@ public sealed class TenantAdminService
 
         tenant.NombreComercial = nombre;
         tenant.RucRfc = rfc;
+        if (!LogoValido(request.LogoUrl, out var logo, out var errorLogo))
+        {
+            return OperacionTenant.Fail(400, errorLogo);
+        }
+
         tenant.Telefono = Limpiar(request.Telefono);
-        tenant.LogoUrl = Limpiar(request.LogoUrl);
+        tenant.LogoUrl = logo;
         await _db.SaveChangesAsync(cancellationToken);
 
         var usuarios = await _db.Usuarios.IgnoreQueryFilters().CountAsync(u => u.TenantId == id, cancellationToken);
@@ -162,6 +170,30 @@ public sealed class TenantAdminService
         FechaVencimiento = tenant.FechaVencimiento,
         TotalUsuarios = totalUsuarios
     };
+
+    private static bool LogoValido(string? valor, out string? logo, out string error)
+    {
+        logo = Limpiar(valor);
+        error = string.Empty;
+        if (logo is null)
+        {
+            return true;
+        }
+
+        var esUrl = logo.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+            || logo.StartsWith("http://", StringComparison.OrdinalIgnoreCase);
+        var esImagen = logo.StartsWith("data:image/png;base64,", StringComparison.OrdinalIgnoreCase)
+            || logo.StartsWith("data:image/jpeg;base64,", StringComparison.OrdinalIgnoreCase)
+            || logo.StartsWith("data:image/webp;base64,", StringComparison.OrdinalIgnoreCase);
+        if (logo.Length > 400_000 || (esUrl && logo.Length > 500) || (!esUrl && !esImagen))
+        {
+            error = "El logo debe ser una imagen PNG, JPG o WebP de menos de 300 KB.";
+            logo = null;
+            return false;
+        }
+
+        return true;
+    }
 
     private static string? Limpiar(string? valor)
     {

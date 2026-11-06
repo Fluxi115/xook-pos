@@ -25,13 +25,13 @@ public sealed class TenantStoreService
             return Resultado<DashboardDto>.Fail(401, "El token no incluye una sucursal válida.");
         }
 
-        var negocio = await _db.Tenants
+        var sucursal = await _db.Tenants
             .AsNoTracking()
             .Where(t => t.Id == _tenant.TenantId)
-            .Select(t => t.NombreComercial)
+            .Select(t => new { t.NombreComercial, t.LogoUrl })
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (negocio is null)
+        if (sucursal is null)
         {
             return Resultado<DashboardDto>.Fail(404, "Sucursal no encontrada.");
         }
@@ -82,7 +82,8 @@ public sealed class TenantStoreService
         var ordenes = delDia.Count;
         return Resultado<DashboardDto>.Ok(new DashboardDto
         {
-            NombreComercial = negocio,
+            NombreComercial = sucursal.NombreComercial,
+            LogoUrl = sucursal.LogoUrl,
             VentasDelDia = ventas,
             OrdenesDelDia = ordenes,
             TicketPromedio = ordenes == 0 ? 0 : decimal.Round(ventas / ordenes, 2),
@@ -308,7 +309,13 @@ public sealed class TenantStoreService
             }
         }
 
-        return (nombre, Limpiar(request.Descripcion), Limpiar(request.FotoUrl), grupos, null, 200);
+        var foto = Limpiar(request.FotoUrl);
+        if (!FotoValida(foto))
+        {
+            return ("", null, null, [], "La foto debe ser una imagen PNG, JPG o WebP de menos de 300 KB.", 400);
+        }
+
+        return (nombre, Limpiar(request.Descripcion), foto, grupos, null, 200);
     }
 
     private void AgregarGrupos(Guid productoId, List<Guid> grupos)
@@ -343,6 +350,21 @@ public sealed class TenantStoreService
             .OrderBy(grupo => grupo.Nombre)
             .ToList()
     };
+
+    private static bool FotoValida(string? foto)
+    {
+        if (foto is null)
+        {
+            return true;
+        }
+
+        var esUrl = foto.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+            || foto.StartsWith("http://", StringComparison.OrdinalIgnoreCase);
+        var esImagen = foto.StartsWith("data:image/png;base64,", StringComparison.OrdinalIgnoreCase)
+            || foto.StartsWith("data:image/jpeg;base64,", StringComparison.OrdinalIgnoreCase)
+            || foto.StartsWith("data:image/webp;base64,", StringComparison.OrdinalIgnoreCase);
+        return foto.Length <= 400_000 && ((esUrl && foto.Length <= 500) || esImagen);
+    }
 
     private static string? Limpiar(string? valor)
     {

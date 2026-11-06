@@ -13,6 +13,7 @@ import { CartPanel } from './CartPanel';
 import { ModifierDrawer } from './ModifierDrawer';
 import { PaymentModal } from './PaymentModal';
 import { MARCA } from '../../marca';
+import { LogoEmpresa } from '../LogoEmpresa';
 import { moneda, piezasDe, totalesDe, type LineaPedido } from './pedido';
 
 interface PosViewProps {
@@ -52,7 +53,7 @@ export function PosView({ sesion, enLinea, onCerrarSesion }: PosViewProps) {
   const catalogoIntentado = useRef(false);
 
   useEffect(() => {
-    if (catalogoIntentado.current || !enLinea || productos === undefined || productos.length > 0) return;
+    if (catalogoIntentado.current || !enLinea || productos === undefined) return;
     catalogoIntentado.current = true;
     void descargarCatalogo().catch(() => undefined);
   }, [enLinea, productos]);
@@ -171,10 +172,13 @@ export function PosView({ sesion, enLinea, onCerrarSesion }: PosViewProps) {
   return (
     <div className="flex h-dvh flex-col bg-ink">
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-line px-3 py-3 md:px-4">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold tracking-[0.16em] text-amber">{MARCA}</p>
-          <p className="truncate text-lg font-semibold">{negocio}</p>
-          <p className="truncate text-sm text-muted">{sesion.nombre}</p>
+        <div className="flex min-w-0 items-center gap-3">
+          <LogoEmpresa src={tenant?.logoUrl} nombre={negocio} />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold tracking-[0.16em] text-amber">{MARCA}</p>
+            <p className="truncate text-lg font-semibold">{negocio}</p>
+            <p className="truncate text-sm text-muted">{sesion.nombre}</p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className={`rounded-full px-3 py-2 text-sm font-medium ${enLinea ? 'bg-leaf/20 text-leaf' : 'bg-orange/20 text-orange'}`}>
