@@ -7,5 +7,6 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 COPY --from=build /app/publish .
 
-# Render inyecta PORT al arrancar; en local se usa 8080.
-ENTRYPOINT ["sh", "-c", "exec dotnet POS.Api.dll --urls http://+:${PORT:-8080}"]
+# Usar el puerto dinámico que asigna Render en lugar de uno fijo
+ENV ASPNETCORE_URLS=http://+:$PORT
+ENTRYPOINT ["dotnet", "POS.Api.dll"]

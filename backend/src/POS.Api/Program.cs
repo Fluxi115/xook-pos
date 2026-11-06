@@ -103,13 +103,15 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-await using (var scope = app.Services.CreateAsyncScope())
+// Las migraciones automáticas y el seeder solo se ejecutan en entorno local (Development)
+// Para producción, aplícalas manualmente por CLI mediante el Transaction Pooler.
+if (app.Environment.IsDevelopment())
 {
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.MigrateAsync();
-
-    if (app.Environment.IsDevelopment())
+    await using (var scope = app.Services.CreateAsyncScope())
     {
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Database.MigrateAsync();
+
         var seeder = scope.ServiceProvider.GetRequiredService<DevDataSeeder>();
         await seeder.SeedAsync();
     }
