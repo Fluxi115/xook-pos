@@ -13,6 +13,12 @@ export interface TenantAdmin {
   maxMeseros: number;
   cajas: number;
   meseros: number;
+  empresaId: string;
+  empresaNombre: string;
+  empresaSlug: string;
+  codigo: string;
+  slug: string;
+  adminUsername?: string | null;
 }
 
 export type Semaforo = 'activo' | 'por-vencer' | 'bloqueado';
@@ -71,8 +77,9 @@ export function crearTenant(body: {
   fechaVencimiento: string;
   maxCajas: number;
   maxMeseros: number;
+  slug: string;
+  codigo: string;
   adminNombre: string;
-  adminUsername: string;
   adminPassword: string;
 }) {
   return apiFetch('/api/v1/superadmin/tenants', { method: 'POST', body: JSON.stringify(body) }).then((response) =>
@@ -82,11 +89,28 @@ export function crearTenant(body: {
 
 export function editarTenant(
   id: string,
-  body: { nombreComercial: string; rucRfc: string; telefono: string; logoUrl: string; maxCajas: number; maxMeseros: number },
+  body: {
+    nombreComercial: string;
+    rucRfc: string;
+    telefono: string;
+    logoUrl: string;
+    maxCajas: number;
+    maxMeseros: number;
+    codigo: string;
+    slug: string;
+    empresaSlug: string;
+  },
 ) {
   return apiFetch(`/api/v1/superadmin/tenants/${id}`, { method: 'PUT', body: JSON.stringify(body) }).then((response) =>
     leerJson<TenantAdmin>(response),
   );
+}
+
+export function crearSucursal(empresaId: string, body: { nombreComercial: string; codigo: string; parentSucursalId?: string; telefono?: string }) {
+  return apiFetch(`/api/v1/superadmin/empresas/${empresaId}/sucursales`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  }).then((response) => leerJson<{ id: string; nombreComercial: string; codigo: string }>(response));
 }
 
 export function actualizarSuscripcion(id: string, body: { fechaVencimiento: string; estado: TenantAdmin['estado'] }) {

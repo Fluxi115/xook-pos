@@ -189,7 +189,7 @@ export function guardarTicket(body: TicketSucursal) {
   );
 }
 
-export function crearPersonal(body: { nombre: string; username: string; password: string; rol: 'Cajero' | 'Mesero' }) {
+export function crearPersonal(body: { nombre: string; username?: string; password: string; rol: 'Cajero' | 'Mesero' }) {
   return apiFetch('/api/v1/tenant-admin/usuarios', { method: 'POST', body: JSON.stringify(body) }).then((response) =>
     leerJson<UsuarioSucursal>(response),
   );

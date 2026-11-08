@@ -44,9 +44,19 @@ public sealed class DevDataSeeder
         var complementosId = Guid.Parse("cccccccc-0000-0000-0000-000000000001");
         var tamanoId = Guid.Parse("cccccccc-0000-0000-0000-000000000002");
 
+        var empresa = new Empresa
+        {
+            Id = Guid.Parse("55555555-5555-5555-5555-555555555555"),
+            Nombre = "Taquería del Centro",
+            Slug = "taqueria",
+            FechaCreacion = ahora
+        };
         var tenant = new Tenant
         {
             Id = TenantId,
+            EmpresaId = empresa.Id,
+            Codigo = "TAQ-CENTRO-01",
+            Slug = "centro",
             NombreComercial = "Taquería del Centro",
             RucRfc = "XAXX010101000",
             Estado = EstadoTenant.Activo,
@@ -82,6 +92,7 @@ public sealed class DevDataSeeder
         };
 
         _db.AddRange(
+            empresa,
             tenant,
             admin,
             cajero,

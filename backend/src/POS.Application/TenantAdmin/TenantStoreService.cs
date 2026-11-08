@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using POS.Application.Abstractions;
 using POS.Application.Caja;
+using POS.Application.Common;
 using POS.Domain.Entities;
 using POS.Domain.Enums;
 
@@ -233,10 +234,9 @@ public sealed class TenantStoreService
         CancellationToken cancellationToken)
     {
         var nombre = request.Nombre.Trim();
-        var username = request.Username.Trim().ToLowerInvariant();
-        if (nombre.Length == 0 || username.Length < 3 || string.IsNullOrWhiteSpace(request.Password))
+        if (nombre.Length == 0 || string.IsNullOrWhiteSpace(request.Password))
         {
-            return Resultado<UsuarioSucursalDto>.Fail(400, "Completa el nombre, el usuario y la contraseña.");
+            return Resultado<UsuarioSucursalDto>.Fail(400, "Completa el nombre y la contraseña.");
         }
 
         if (request.Password.Length < 6)
@@ -249,9 +249,29 @@ public sealed class TenantStoreService
             return Resultado<UsuarioSucursalDto>.Fail(400, "Solo puedes crear cajeros o meseros.");
         }
 
-        if (await _db.Usuarios.IgnoreQueryFilters().AnyAsync(u => u.Username == username, cancellationToken))
+        var username = request.Username?.Trim().ToLowerInvariant() ?? string.Empty;
+        if (username.Length == 0)
+        {
+            var marca = await _db.Tenants
+                .AsNoTracking()
+                .Where(t => t.Id == _tenant.TenantId)
+                .Select(t => new { t.Slug, Empresa = t.Empresa.Slug })
+                .FirstOrDefaultAsync(cancellationToken);
+            if (marca is null || string.IsNullOrWhiteSpace(marca.Empresa) || string.IsNullOrWhiteSpace(marca.Slug))
+            {
+                return Resultado<UsuarioSucursalDto>.Fail(400, "La sucursal no tiene clave para armar el usuario.");
+            }
+
+            username = await NombreUsuario.Disponible(_db, NombreUsuario.DeSucursal(marca.Empresa, marca.Slug, nombre), cancellationToken);
+        }
+        else if (await _db.Usuarios.IgnoreQueryFilters().AnyAsync(u => u.Username == username, cancellationToken))
         {
             return Resultado<UsuarioSucursalDto>.Fail(409, "Ese usuario ya está registrado.");
+        }
+
+        if (username.Length < 3)
+        {
+            return Resultado<UsuarioSucursalDto>.Fail(400, "El nombre no alcanza para armar el usuario de acceso.");
         }
 
         var tope = await _db.Tenants

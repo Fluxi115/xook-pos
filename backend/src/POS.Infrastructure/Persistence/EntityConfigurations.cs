@@ -4,6 +4,17 @@ using POS.Domain.Entities;
 
 namespace POS.Infrastructure.Persistence;
 
+internal sealed class EmpresaConfiguration : IEntityTypeConfiguration<Empresa>
+{
+    public void Configure(EntityTypeBuilder<Empresa> builder)
+    {
+        builder.ToTable("empresas");
+        builder.Property(e => e.Nombre).HasMaxLength(160).IsRequired();
+        builder.Property(e => e.Slug).HasMaxLength(40).IsRequired();
+        builder.HasIndex(e => e.Slug).IsUnique();
+    }
+}
+
 internal sealed class TenantConfiguration : IEntityTypeConfiguration<Tenant>
 {
     public void Configure(EntityTypeBuilder<Tenant> builder)
@@ -11,7 +22,19 @@ internal sealed class TenantConfiguration : IEntityTypeConfiguration<Tenant>
         builder.ToTable("tenants");
         builder.Property(t => t.NombreComercial).HasMaxLength(160).IsRequired();
         builder.Property(t => t.RucRfc).HasMaxLength(20).IsRequired();
-        builder.HasIndex(t => t.RucRfc).IsUnique();
+        builder.HasIndex(t => t.RucRfc);
+        builder.Property(t => t.Codigo).HasMaxLength(32).IsRequired();
+        builder.HasIndex(t => t.Codigo).IsUnique();
+        builder.Property(t => t.Slug).HasMaxLength(40).IsRequired();
+        builder.HasIndex(t => new { t.EmpresaId, t.Slug }).IsUnique();
+        builder.HasOne(t => t.Empresa)
+            .WithMany(e => e.Sucursales)
+            .HasForeignKey(t => t.EmpresaId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(t => t.ParentSucursal)
+            .WithMany()
+            .HasForeignKey(t => t.ParentSucursalId)
+            .OnDelete(DeleteBehavior.Restrict);
         builder.Property(t => t.Telefono).HasMaxLength(30);
         builder.Property(t => t.Direccion).HasMaxLength(200);
         builder.Property(t => t.MensajeTicket).HasMaxLength(200);

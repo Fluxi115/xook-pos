@@ -6,6 +6,18 @@ public class Tenant
 {
     public Guid Id { get; set; }
 
+    public Guid EmpresaId { get; set; }
+
+    public Empresa Empresa { get; set; } = null!;
+
+    public Guid? ParentSucursalId { get; set; }
+
+    public Tenant? ParentSucursal { get; set; }
+
+    public string Codigo { get; set; } = string.Empty;
+
+    public string Slug { get; set; } = string.Empty;
+
     public string NombreComercial { get; set; } = string.Empty;
 
     public string RucRfc { get; set; } = string.Empty;

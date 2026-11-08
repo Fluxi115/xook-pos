@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using POS.Application.Auth;
+using POS.Application.Empresas;
 using POS.Application.Caja;
 using POS.Application.Catalogo;
 using POS.Application.SuperAdmin;
@@ -18,6 +19,7 @@ public static class DependencyInjection
         services.AddScoped<VentaSyncService>();
         services.AddScoped<ISuscripcionGuard, SuscripcionGuard>();
         services.AddScoped<TenantAdminService>();
+        services.AddScoped<EmpresaAdminService>();
         services.AddScoped<TenantStoreService>();
         services.AddScoped<CajaTurnoService>();
         return services;

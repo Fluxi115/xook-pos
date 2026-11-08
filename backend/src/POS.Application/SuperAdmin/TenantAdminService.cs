@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using POS.Application.Abstractions;
+using POS.Application.Common;
 using POS.Domain.Entities;
 using POS.Domain.Enums;
 
@@ -24,7 +25,13 @@ public sealed class TenantAdminService
             .ToListAsync(cancellationToken);
 
         var conteos = await ContarUsuariosAsync(cancellationToken);
-        return tenants.Select(tenant => Mapear(tenant, conteos.GetValueOrDefault(tenant.Id))).ToList();
+        var marcas = await _db.Empresas.AsNoTracking().Select(e => new { e.Id, e.Nombre, e.Slug }).ToListAsync(cancellationToken);
+        var empresas = marcas.ToDictionary(e => e.Id);
+        return tenants.Select(tenant =>
+        {
+            empresas.TryGetValue(tenant.EmpresaId, out var marca);
+            return Mapear(tenant, conteos.GetValueOrDefault(tenant.Id), marca?.Nombre ?? string.Empty, marca?.Slug ?? string.Empty);
+        }).ToList();
     }
 
     public async Task<OperacionTenant> CrearAsync(CrearTenantRequest request, CancellationToken cancellationToken)
@@ -32,16 +39,18 @@ public sealed class TenantAdminService
         var nombre = request.NombreComercial.Trim();
         var rfc = request.RucRfc.Trim().ToUpperInvariant();
         var adminNombre = request.AdminNombre.Trim();
-        var username = request.AdminUsername.Trim().ToLowerInvariant();
+        var empresaSlug = NombreUsuario.Slug(request.Slug);
+        var sucursalSlug = NombreUsuario.Slug(nombre);
+        var codigo = NombreUsuario.Codigo(request.Codigo);
         var telefono = Limpiar(request.Telefono);
         if (!LogoValido(request.LogoUrl, out var logo, out var errorLogo))
         {
             return OperacionTenant.Fail(400, errorLogo);
         }
 
-        if (nombre.Length == 0 || rfc.Length == 0 || adminNombre.Length == 0 || username.Length < 3 || string.IsNullOrWhiteSpace(request.AdminPassword))
+        if (nombre.Length == 0 || rfc.Length == 0 || adminNombre.Length == 0 || empresaSlug.Length < 3 || sucursalSlug.Length < 2 || codigo.Length < 3 || string.IsNullOrWhiteSpace(request.AdminPassword))
         {
-            return OperacionTenant.Fail(400, "Completa el negocio, el RFC y el administrador inicial.");
+            return OperacionTenant.Fail(400, "Completa el negocio, la clave de la empresa, el código de sucursal, el RFC y el administrador.");
         }
 
         if (request.AdminPassword.Length < 6)
@@ -59,20 +68,31 @@ public sealed class TenantAdminService
             return OperacionTenant.Fail(400, "Las cajas y los meseros van de 0 a 99.");
         }
 
-        if (await _db.Tenants.AnyAsync(t => t.RucRfc == rfc, cancellationToken))
+        if (await _db.Empresas.AnyAsync(e => e.Slug == empresaSlug, cancellationToken))
         {
-            return OperacionTenant.Fail(409, "Ese RFC/RUC ya está registrado.");
+            return OperacionTenant.Fail(409, "Esa clave de empresa ya está registrada.");
         }
 
-        if (await _db.Usuarios.IgnoreQueryFilters().AnyAsync(u => u.Username == username, cancellationToken))
+        if (await _db.Tenants.AnyAsync(t => t.Codigo == codigo, cancellationToken))
         {
-            return OperacionTenant.Fail(409, "Ese usuario ya está registrado.");
+            return OperacionTenant.Fail(409, "Ese código de sucursal ya está registrado.");
         }
 
+        var ahora = DateTime.UtcNow;
+        var empresa = new Empresa
+        {
+            Id = Guid.NewGuid(),
+            Nombre = nombre,
+            Slug = empresaSlug,
+            FechaCreacion = ahora
+        };
         var tenant = new Tenant
         {
             Id = Guid.NewGuid(),
+            EmpresaId = empresa.Id,
             NombreComercial = nombre,
+            Codigo = codigo,
+            Slug = sucursalSlug,
             RucRfc = rfc,
             Telefono = telefono,
             LogoUrl = logo,
@@ -80,9 +100,9 @@ public sealed class TenantAdminService
             MaxMeseros = request.MaxMeseros,
             Estado = EstadoTenant.Activo,
             FechaVencimiento = AUtc(request.FechaVencimiento),
-            FechaCreacion = DateTime.UtcNow
+            FechaCreacion = ahora
         };
-
+        var username = await NombreUsuario.Disponible(_db, NombreUsuario.DeEmpresa(empresaSlug, adminNombre), cancellationToken);
         var admin = new Usuario
         {
             Id = Guid.NewGuid(),
@@ -90,14 +110,17 @@ public sealed class TenantAdminService
             Nombre = adminNombre,
             Username = username,
             PasswordHash = _hasher.Hash(request.AdminPassword),
-            Rol = RolUsuario.AdminSucursal,
+            Rol = RolUsuario.AdminEmpresa,
             Activo = true
         };
 
+        _db.Empresas.Add(empresa);
         _db.Tenants.Add(tenant);
         _db.Usuarios.Add(admin);
         await _db.SaveChangesAsync(cancellationToken);
-        return OperacionTenant.Ok(Mapear(tenant, new Cupo(1, 0, 0)));
+        var dto = Mapear(tenant, new Cupo(1, 0, 0), empresa.Nombre, empresa.Slug);
+        dto.AdminUsername = username;
+        return OperacionTenant.Ok(dto);
     }
 
     public async Task<OperacionTenant> ActualizarAsync(Guid id, ActualizarTenantRequest request, CancellationToken cancellationToken)
@@ -115,12 +138,6 @@ public sealed class TenantAdminService
             return OperacionTenant.Fail(400, "El nombre comercial y el RFC/RUC son obligatorios.");
         }
 
-        var rfcOcupado = await _db.Tenants.AnyAsync(t => t.Id != id && t.RucRfc == rfc, cancellationToken);
-        if (rfcOcupado)
-        {
-            return OperacionTenant.Fail(409, "Ese RFC/RUC ya está registrado.");
-        }
-
         tenant.NombreComercial = nombre;
         tenant.RucRfc = rfc;
         if (!LogoValido(request.LogoUrl, out var logo, out var errorLogo))
@@ -133,6 +150,58 @@ public sealed class TenantAdminService
             return OperacionTenant.Fail(400, "Las cajas y los meseros van de 0 a 99.");
         }
 
+        if (!string.IsNullOrWhiteSpace(request.Codigo))
+        {
+            var codigo = NombreUsuario.Codigo(request.Codigo);
+            if (codigo.Length < 3)
+            {
+                return OperacionTenant.Fail(400, "El código de sucursal es demasiado corto.");
+            }
+
+            if (await _db.Tenants.AnyAsync(t => t.Id != id && t.Codigo == codigo, cancellationToken))
+            {
+                return OperacionTenant.Fail(409, "Ese código de sucursal ya está registrado.");
+            }
+
+            tenant.Codigo = codigo;
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Slug))
+        {
+            var slug = NombreUsuario.Slug(request.Slug);
+            if (slug.Length < 2)
+            {
+                return OperacionTenant.Fail(400, "La clave de la sucursal es demasiado corta.");
+            }
+
+            if (await _db.Tenants.AnyAsync(t => t.Id != id && t.EmpresaId == tenant.EmpresaId && t.Slug == slug, cancellationToken))
+            {
+                return OperacionTenant.Fail(409, "Esa clave ya la usa otra sucursal de la empresa.");
+            }
+
+            tenant.Slug = slug;
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.EmpresaSlug))
+        {
+            var empresaSlug = NombreUsuario.Slug(request.EmpresaSlug);
+            if (empresaSlug.Length < 3)
+            {
+                return OperacionTenant.Fail(400, "La clave de la empresa es demasiado corta.");
+            }
+
+            if (await _db.Empresas.AnyAsync(e => e.Id != tenant.EmpresaId && e.Slug == empresaSlug, cancellationToken))
+            {
+                return OperacionTenant.Fail(409, "Esa clave de empresa ya está registrada.");
+            }
+
+            var empresa = await _db.Empresas.FirstOrDefaultAsync(e => e.Id == tenant.EmpresaId, cancellationToken);
+            if (empresa is not null)
+            {
+                empresa.Slug = empresaSlug;
+            }
+        }
+
         tenant.Telefono = Limpiar(request.Telefono);
         tenant.LogoUrl = logo;
         tenant.MaxCajas = request.MaxCajas;
@@ -140,7 +209,8 @@ public sealed class TenantAdminService
         await _db.SaveChangesAsync(cancellationToken);
 
         var conteos = await ContarUsuariosAsync(cancellationToken);
-        return OperacionTenant.Ok(Mapear(tenant, conteos.GetValueOrDefault(id)));
+        var marca = await MarcaEmpresaAsync(tenant.EmpresaId, cancellationToken);
+        return OperacionTenant.Ok(Mapear(tenant, conteos.GetValueOrDefault(id), marca.Nombre, marca.Slug));
     }
 
     public async Task<OperacionTenant> ActualizarSuscripcionAsync(
@@ -164,7 +234,8 @@ public sealed class TenantAdminService
         await _db.SaveChangesAsync(cancellationToken);
 
         var conteos = await ContarUsuariosAsync(cancellationToken);
-        return OperacionTenant.Ok(Mapear(tenant, conteos.GetValueOrDefault(id)));
+        var marca = await MarcaEmpresaAsync(tenant.EmpresaId, cancellationToken);
+        return OperacionTenant.Ok(Mapear(tenant, conteos.GetValueOrDefault(id), marca.Nombre, marca.Slug));
     }
 
     public async Task<List<PagoSuscripcionDto>> ListarPagosAsync(CancellationToken cancellationToken)
@@ -274,7 +345,17 @@ public sealed class TenantAdminService
 
     private static bool CupoValido(int cajas, int meseros) => cajas is >= 0 and <= 99 && meseros is >= 0 and <= 99;
 
-    private static TenantAdminDto Mapear(Tenant tenant, Cupo cupo) => new()
+    private async Task<(string Nombre, string Slug)> MarcaEmpresaAsync(Guid empresaId, CancellationToken cancellationToken)
+    {
+        var marca = await _db.Empresas
+            .AsNoTracking()
+            .Where(e => e.Id == empresaId)
+            .Select(e => new { e.Nombre, e.Slug })
+            .FirstOrDefaultAsync(cancellationToken);
+        return (marca?.Nombre ?? string.Empty, marca?.Slug ?? string.Empty);
+    }
+
+    private static TenantAdminDto Mapear(Tenant tenant, Cupo cupo, string empresaNombre, string empresaSlug) => new()
     {
         Id = tenant.Id,
         NombreComercial = tenant.NombreComercial,
@@ -287,7 +368,12 @@ public sealed class TenantAdminService
         MaxCajas = tenant.MaxCajas,
         MaxMeseros = tenant.MaxMeseros,
         Cajas = cupo.Cajas,
-        Meseros = cupo.Meseros
+        Meseros = cupo.Meseros,
+        EmpresaId = tenant.EmpresaId,
+        EmpresaNombre = empresaNombre ?? string.Empty,
+        EmpresaSlug = empresaSlug ?? string.Empty,
+        Codigo = tenant.Codigo,
+        Slug = tenant.Slug
     };
 
     private readonly record struct Cupo(int Total, int Cajas, int Meseros);

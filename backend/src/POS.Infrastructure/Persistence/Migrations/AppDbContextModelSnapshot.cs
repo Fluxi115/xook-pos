@@ -324,10 +324,45 @@ namespace POS.Infrastructure.Persistence.Migrations
                     b.ToTable("productos_modificador", (string)null);
                 });
 
+            modelBuilder.Entity("POS.Domain.Entities.Empresa", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("FechaCreacion")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Slug")
+                        .IsUnique();
+
+                    b.ToTable("empresas", (string)null);
+                });
+
             modelBuilder.Entity("POS.Domain.Entities.Tenant", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Codigo")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<Guid>("EmpresaId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Estado")
@@ -363,10 +398,18 @@ namespace POS.Infrastructure.Persistence.Migrations
                         .HasMaxLength(160)
                         .HasColumnType("character varying(160)");
 
+                    b.Property<Guid?>("ParentSucursalId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("RucRfc")
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
 
                     b.Property<decimal>("TasaImpuesto")
                         .HasPrecision(6, 4)
@@ -378,8 +421,15 @@ namespace POS.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("RucRfc")
+                    b.HasIndex("Codigo")
                         .IsUnique();
+
+                    b.HasIndex("EmpresaId", "Slug")
+                        .IsUnique();
+
+                    b.HasIndex("ParentSucursalId");
+
+                    b.HasIndex("RucRfc");
 
                     b.ToTable("tenants", (string)null);
                 });
@@ -704,6 +754,24 @@ namespace POS.Infrastructure.Persistence.Migrations
                     b.Navigation("Producto");
                 });
 
+            modelBuilder.Entity("POS.Domain.Entities.Tenant", b =>
+                {
+                    b.HasOne("POS.Domain.Entities.Empresa", "Empresa")
+                        .WithMany("Sucursales")
+                        .HasForeignKey("EmpresaId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("POS.Domain.Entities.Tenant", "ParentSucursal")
+                        .WithMany()
+                        .HasForeignKey("ParentSucursalId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Empresa");
+
+                    b.Navigation("ParentSucursal");
+                });
+
             modelBuilder.Entity("POS.Domain.Entities.TurnoCaja", b =>
                 {
                     b.HasOne("POS.Domain.Entities.Tenant", null)
@@ -774,6 +842,11 @@ namespace POS.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("POS.Domain.Entities.Categoria", b =>
                 {
                     b.Navigation("Productos");
+                });
+
+            modelBuilder.Entity("POS.Domain.Entities.Empresa", b =>
+                {
+                    b.Navigation("Sucursales");
                 });
 
             modelBuilder.Entity("POS.Domain.Entities.GrupoModificador", b =>

@@ -6,6 +6,7 @@ import { reducirLogo } from '../logo';
 import { ApiError, cerrarSesion } from '../../services/apiClient';
 import {
   actualizarSuscripcion,
+  crearSucursal,
   crearTenant,
   editarTenant,
   fechaDesdeHoy,
@@ -52,6 +53,7 @@ export function SuperAdminPage({ onCerrarSesion }: SuperAdminPageProps) {
   const [edicion, setEdicion] = useState<TenantAdmin | null>(null);
   const [renovacion, setRenovacion] = useState<TenantAdmin | null>(null);
   const [cobro, setCobro] = useState<TenantAdmin | null>(null);
+  const [sucursalNueva, setSucursalNueva] = useState<TenantAdmin | null>(null);
   const [ocupadoId, setOcupadoId] = useState<string | null>(null);
 
   async function cargar() {
@@ -91,7 +93,7 @@ export function SuperAdminPage({ onCerrarSesion }: SuperAdminPageProps) {
     const consulta = busqueda.trim().toLowerCase();
     if (!consulta) return tenants;
     return tenants.filter((tenant) =>
-      [tenant.nombreComercial, tenant.rucRfc, tenant.telefono ?? ''].join(' ').toLowerCase().includes(consulta),
+      [tenant.nombreComercial, tenant.codigo ?? '', tenant.empresaNombre ?? '', tenant.rucRfc, tenant.telefono ?? ''].join(' ').toLowerCase().includes(consulta),
     );
   }, [busqueda, tenants]);
 
@@ -194,7 +196,10 @@ export function SuperAdminPage({ onCerrarSesion }: SuperAdminPageProps) {
                       <td className="px-4 py-3 font-medium">
                         <div className="flex items-center gap-3">
                           <LogoEmpresa src={tenant.logoUrl} nombre={tenant.nombreComercial} className="h-10 w-10" />
-                          {tenant.nombreComercial}
+                          <span>
+                            {tenant.nombreComercial}
+                            <span className="block text-xs text-muted">{tenant.codigo || 'Sin código'}</span>
+                          </span>
                         </div>
                       </td>
                       <td className="px-4 py-3">{tenant.rucRfc}</td>
@@ -227,6 +232,9 @@ export function SuperAdminPage({ onCerrarSesion }: SuperAdminPageProps) {
                           </button>
                           <button type="button" className="min-h-10 rounded-xl border border-line px-3 text-sm" onClick={() => setEdicion(tenant)}>
                             Editar datos
+                          </button>
+                          <button type="button" className="min-h-10 rounded-xl border border-line px-3 text-sm" onClick={() => setSucursalNueva(tenant)}>
+                            Agregar sucursal
                           </button>
                         </div>
                       </td>
@@ -268,6 +276,17 @@ export function SuperAdminPage({ onCerrarSesion }: SuperAdminPageProps) {
           }}
         />
       )}
+      {sucursalNueva && (
+        <SucursalModal
+          empresa={sucursalNueva}
+          hermanas={tenants.filter((item) => item.empresaId === sucursalNueva.empresaId)}
+          onCerrar={() => setSucursalNueva(null)}
+          onLista={async () => {
+            setSucursalNueva(null);
+            await cargar();
+          }}
+        />
+      )}
       {cobro && (
         <PagoModal
           tenant={cobro}
@@ -288,7 +307,8 @@ function AltaModal({ onCerrar, onLista }: { onCerrar: () => void; onLista: () =>
   const [telefono, setTelefono] = useState('');
   const [logo, setLogo] = useState('');
   const [adminNombre, setAdminNombre] = useState('');
-  const [username, setUsername] = useState('');
+  const [clave, setClave] = useState('');
+  const [codigo, setCodigo] = useState('');
   const [password, setPassword] = useState('');
   const [vence, setVence] = useState(() => fechaInicial(12));
   const [cajas, setCajas] = useState('1');
@@ -305,7 +325,7 @@ function AltaModal({ onCerrar, onLista }: { onCerrar: () => void; onLista: () =>
     }
     setGuardando(true);
     try {
-      await crearTenant({
+      const creada = await crearTenant({
         nombreComercial: nombre,
         rucRfc: rfc,
         telefono,
@@ -313,11 +333,12 @@ function AltaModal({ onCerrar, onLista }: { onCerrar: () => void; onLista: () =>
         fechaVencimiento: finDeDiaUtc(vence),
         maxCajas,
         maxMeseros,
+        slug: clave,
+        codigo,
         adminNombre,
-        adminUsername: username,
         adminPassword: password,
       });
-      toast.success('Sucursal creada');
+      toast.success(creada.adminUsername ? `Empresa creada. Entra con ${creada.adminUsername}` : 'Empresa creada');
       await onLista();
     } catch (caught) {
       toast.error(caught instanceof ApiError ? caught.message : 'No se pudo crear la sucursal.');
@@ -335,8 +356,9 @@ function AltaModal({ onCerrar, onLista }: { onCerrar: () => void; onLista: () =>
         <Campo id="alta-cajas" etiqueta="Cajas permitidas" value={cajas} onChange={setCajas} type="number" required />
         <Campo id="alta-meseros" etiqueta="Meseros permitidos" value={meseros} onChange={setMeseros} type="number" required />
         <LogoCampo id="alta-logo" valor={logo} onChange={setLogo} />
+        <Campo id="alta-clave" etiqueta="Clave de la empresa" value={clave} onChange={setClave} required />
+        <Campo id="alta-codigo" etiqueta="Código de la sucursal" value={codigo} onChange={setCodigo} required />
         <Campo id="alta-admin" etiqueta="Nombre del administrador" value={adminNombre} onChange={setAdminNombre} required />
-        <Campo id="alta-user" etiqueta="Usuario" value={username} onChange={setUsername} required />
         <Campo id="alta-pass" etiqueta="Contraseña" value={password} onChange={setPassword} type="password" required />
         <div>
           <label className="text-sm text-muted" htmlFor="alta-vence">
@@ -384,6 +406,9 @@ function EditarModal({
   const [logo, setLogo] = useState(tenant.logoUrl ?? '');
   const [cajas, setCajas] = useState(String(tenant.maxCajas));
   const [meseros, setMeseros] = useState(String(tenant.maxMeseros));
+  const [codigo, setCodigo] = useState(tenant.codigo ?? '');
+  const [slug, setSlug] = useState(tenant.slug ?? '');
+  const [empresaSlug, setEmpresaSlug] = useState(tenant.empresaSlug ?? '');
   const [guardando, setGuardando] = useState(false);
 
   async function enviar(event: FormEvent) {
@@ -396,7 +421,17 @@ function EditarModal({
     }
     setGuardando(true);
     try {
-      await editarTenant(tenant.id, { nombreComercial: nombre, rucRfc: rfc, telefono, logoUrl: logo, maxCajas, maxMeseros });
+      await editarTenant(tenant.id, {
+        nombreComercial: nombre,
+        rucRfc: rfc,
+        telefono,
+        logoUrl: logo,
+        maxCajas,
+        maxMeseros,
+        codigo,
+        slug,
+        empresaSlug,
+      });
       toast.success('Datos actualizados');
       await onLista();
     } catch (caught) {
@@ -410,6 +445,9 @@ function EditarModal({
     <Modal titulo="Editar datos" onCerrar={onCerrar}>
       <form onSubmit={enviar} className="grid gap-3">
         <Campo id="edit-nombre" etiqueta="Nombre comercial" value={nombre} onChange={setNombre} required />
+        <Campo id="edit-empresa" etiqueta="Clave de la empresa" value={empresaSlug} onChange={setEmpresaSlug} required />
+        <Campo id="edit-codigo" etiqueta="Código de la sucursal" value={codigo} onChange={setCodigo} required />
+        <Campo id="edit-slug" etiqueta="Clave de la sucursal" value={slug} onChange={setSlug} required />
         <Campo id="edit-rfc" etiqueta="RFC / RUC" value={rfc} onChange={setRfc} required />
         <Campo id="edit-tel" etiqueta="Teléfono" value={telefono} onChange={setTelefono} />
         <Campo id="edit-cajas" etiqueta="Cajas permitidas" value={cajas} onChange={setCajas} type="number" required />
@@ -424,6 +462,65 @@ function EditarModal({
           </button>
           <button type="submit" disabled={guardando} className="min-h-12 rounded-2xl bg-amber px-4 font-semibold text-ink disabled:opacity-50">
             {guardando ? 'Guardando…' : 'Guardar'}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function SucursalModal({
+  empresa,
+  hermanas,
+  onCerrar,
+  onLista,
+}: {
+  empresa: TenantAdmin;
+  hermanas: TenantAdmin[];
+  onCerrar: () => void;
+  onLista: () => Promise<void>;
+}) {
+  const [nombre, setNombre] = useState('');
+  const [codigo, setCodigo] = useState('');
+  const [padre, setPadre] = useState(empresa.id);
+  const [guardando, setGuardando] = useState(false);
+
+  async function enviar(event: FormEvent) {
+    event.preventDefault();
+    setGuardando(true);
+    try {
+      await crearSucursal(empresa.empresaId, {
+        nombreComercial: nombre,
+        codigo,
+        parentSucursalId: padre || undefined,
+      });
+      toast.success('Sucursal agregada');
+      await onLista();
+    } catch (caught) {
+      toast.error(caught instanceof ApiError ? caught.message : 'No se pudo agregar la sucursal.');
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <Modal titulo={`Sucursal de ${empresa.empresaNombre || empresa.nombreComercial}`} onCerrar={onCerrar}>
+      <form onSubmit={enviar} className="grid gap-3">
+        <Campo id="extra-nombre" etiqueta="Nombre comercial" value={nombre} onChange={setNombre} required />
+        <Campo id="extra-codigo" etiqueta="Código" value={codigo} onChange={setCodigo} required />
+        <div>
+          <label className="text-sm text-muted" htmlFor="extra-padre">Sucursal padre</label>
+          <select id="extra-padre" value={padre} onChange={(event) => setPadre(event.target.value)} className="mt-1 min-h-12 w-full rounded-2xl border border-line bg-ink px-3">
+            <option value="">Sin padre</option>
+            {hermanas.map((item) => (
+              <option key={item.id} value={item.id}>{item.nombreComercial}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button type="button" className="min-h-12 rounded-2xl border border-line px-4" onClick={onCerrar}>Cancelar</button>
+          <button type="submit" disabled={guardando} className="min-h-12 rounded-2xl bg-amber px-4 font-semibold text-ink disabled:opacity-50">
+            {guardando ? 'Guardando…' : 'Crear sucursal'}
           </button>
         </div>
       </form>

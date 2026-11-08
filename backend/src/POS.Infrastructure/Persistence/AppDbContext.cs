@@ -24,6 +24,8 @@ public sealed class AppDbContext : DbContext, IAppDbContext
 
     public Guid CurrentTenantId => _tenantProvider.TenantId;
 
+    public DbSet<Empresa> Empresas => Set<Empresa>();
+
     public DbSet<Tenant> Tenants => Set<Tenant>();
 
     public DbSet<Usuario> Usuarios => Set<Usuario>();
@@ -66,8 +68,9 @@ public sealed class AppDbContext : DbContext, IAppDbContext
                 continue;
             }
 
-            var conservaTenantExplicito = _currentUser?.Rol == nameof(RolUsuario.SuperAdmin)
-                && entry.Entity.TenantId != Guid.Empty;
+            var rol = _currentUser?.Rol;
+            var conservaTenantExplicito = entry.Entity.TenantId != Guid.Empty
+                && (rol == nameof(RolUsuario.SuperAdmin) || rol == nameof(RolUsuario.AdminEmpresa));
             if (conservaTenantExplicito)
             {
                 continue;

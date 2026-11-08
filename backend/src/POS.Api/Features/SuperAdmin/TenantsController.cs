@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using POS.Application.Empresas;
 using POS.Application.SuperAdmin;
 
 namespace POS.Api.Features.SuperAdmin;
@@ -10,10 +11,12 @@ namespace POS.Api.Features.SuperAdmin;
 public sealed class TenantsController : ControllerBase
 {
     private readonly TenantAdminService _tenants;
+    private readonly EmpresaAdminService _empresas;
 
-    public TenantsController(TenantAdminService tenants)
+    public TenantsController(TenantAdminService tenants, EmpresaAdminService empresas)
     {
         _tenants = tenants;
+        _empresas = empresas;
     }
 
     [HttpGet]
@@ -33,6 +36,18 @@ public sealed class TenantsController : ControllerBase
         }
 
         return Ok(resultado.Tenant);
+    }
+
+    [HttpPost("/api/v1/superadmin/empresas/{empresaId:guid}/sucursales")]
+    public async Task<IActionResult> CrearSucursal(Guid empresaId, [FromBody] CrearSucursalEmpresaRequest request, CancellationToken cancellationToken)
+    {
+        var resultado = await _empresas.CrearSucursalAsync(empresaId, request, cancellationToken);
+        if (!resultado.Exitoso)
+        {
+            return StatusCode(resultado.StatusCode, new { mensaje = resultado.Mensaje });
+        }
+
+        return Ok(resultado.Valor);
     }
 
     [HttpPut("{id:guid}")]

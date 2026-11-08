@@ -5,6 +5,8 @@ namespace POS.Application.Abstractions;
 
 public interface IAppDbContext
 {
+    DbSet<Empresa> Empresas { get; }
+
     DbSet<Tenant> Tenants { get; }
 
     DbSet<Usuario> Usuarios { get; }

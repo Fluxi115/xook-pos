@@ -404,7 +404,7 @@ function Personal({
         <div>
           <h2 className="text-2xl font-semibold">Personal</h2>
           <p className="mt-1 text-sm text-muted">
-            Cajas {cajas} de {maxCajas}. Meseros {meseros} de {maxMeseros}.
+            Cajas {cajas} de {maxCajas}. Meseros {meseros} de {maxMeseros}. El usuario de acceso se arma con la empresa y esta sucursal.
           </p>
         </div>
         <button type="button" className="min-h-11 rounded-2xl bg-amber px-4 font-semibold text-ink" onClick={onNuevo}>
@@ -559,7 +559,6 @@ function ProductoModal({
 
 function UsuarioModal({ onCerrar, onGuardado }: { onCerrar: () => void; onGuardado: () => Promise<void> }) {
   const [nombre, setNombre] = useState('');
-  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [rol, setRol] = useState<'Cajero' | 'Mesero'>('Cajero');
   const [guardando, setGuardando] = useState(false);
@@ -568,8 +567,8 @@ function UsuarioModal({ onCerrar, onGuardado }: { onCerrar: () => void; onGuarda
     event.preventDefault();
     setGuardando(true);
     try {
-      await crearPersonal({ nombre, username, password, rol });
-      toast.success('Usuario creado');
+      const creado = await crearPersonal({ nombre, password, rol });
+      toast.success(`Entra con ${creado.username}`);
       await onGuardado();
     } catch (caught) {
       toast.error(caught instanceof ApiError ? caught.message : 'No se pudo crear el usuario.');
@@ -582,7 +581,6 @@ function UsuarioModal({ onCerrar, onGuardado }: { onCerrar: () => void; onGuarda
     <Modal titulo="Crear usuario" onCerrar={onCerrar}>
       <form onSubmit={enviar} className="grid gap-3">
         <Campo id="user-nombre" etiqueta="Nombre" value={nombre} onChange={setNombre} required />
-        <Campo id="user-username" etiqueta="Usuario" value={username} onChange={setUsername} required />
         <Campo id="user-pass" etiqueta="Contraseña" value={password} onChange={setPassword} type="password" required />
         <div>
           <label className="text-sm text-muted" htmlFor="user-rol">
