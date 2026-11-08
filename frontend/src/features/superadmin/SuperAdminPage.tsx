@@ -91,11 +91,19 @@ export function SuperAdminPage({ onCerrarSesion }: SuperAdminPageProps) {
 
   const visibles = useMemo(() => {
     const consulta = busqueda.trim().toLowerCase();
-    if (!consulta) return tenants;
-    return tenants.filter((tenant) =>
-      [tenant.nombreComercial, tenant.codigo ?? '', tenant.empresaNombre ?? '', tenant.rucRfc, tenant.telefono ?? ''].join(' ').toLowerCase().includes(consulta),
-    );
+    const lista = consulta
+      ? tenants.filter((tenant) =>
+          [tenant.nombreComercial, tenant.codigo ?? '', tenant.empresaNombre ?? '', tenant.parentNombre ?? '', tenant.rucRfc, tenant.telefono ?? '']
+            .join(' ')
+            .toLowerCase()
+            .includes(consulta),
+        )
+      : tenants;
+    return ordenarSucursales(lista);
   }, [busqueda, tenants]);
+
+  const arbol = useMemo(() => arbolSucursales(visibles), [visibles]);
+  const [abiertas, setAbiertas] = useState<Record<string, boolean>>({});
 
   function salir() {
     cerrarSesion();
@@ -175,74 +183,21 @@ export function SuperAdminPage({ onCerrarSesion }: SuperAdminPageProps) {
         )}
 
         {!cargando && !error && seccion === 'sucursales' && visibles.length > 0 && (
-          <div className="overflow-x-auto rounded-3xl border border-line">
-            <table className="min-w-[860px] w-full border-collapse text-left">
-              <thead className="bg-panel text-sm text-muted">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Negocio</th>
-                  <th className="px-4 py-3 font-medium">RFC / RUC</th>
-                  <th className="px-4 py-3 font-medium">Teléfono</th>
-                  <th className="px-4 py-3 font-medium">Cupo</th>
-                  <th className="px-4 py-3 font-medium">Vence</th>
-                  <th className="px-4 py-3 font-medium">Estado</th>
-                  <th className="px-4 py-3 font-medium">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibles.map((tenant) => {
-                  const luz = semaforo(tenant);
-                  return (
-                    <tr key={tenant.id} className="border-t border-line">
-                      <td className="px-4 py-3 font-medium">
-                        <div className="flex items-center gap-3">
-                          <LogoEmpresa src={tenant.logoUrl} nombre={tenant.nombreComercial} className="h-10 w-10" />
-                          <span>
-                            {tenant.nombreComercial}
-                            <span className="block text-xs text-muted">{tenant.codigo || 'Sin código'}</span>
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">{tenant.rucRfc}</td>
-                      <td className="px-4 py-3">{tenant.telefono || '—'}</td>
-                      <td className="px-4 py-3">
-                        {tenant.cajas}/{tenant.maxCajas} cajas · {tenant.meseros}/{tenant.maxMeseros} meseros
-                      </td>
-                      <td className="px-4 py-3">{fecha.format(new Date(tenant.fechaVencimiento))}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm ${COLOR[luz]}`}>
-                          <span className="h-2.5 w-2.5 rounded-full bg-current" />
-                          {ETIQUETA[luz]}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <button type="button" className="min-h-10 rounded-xl bg-amber px-3 text-sm font-semibold text-ink" onClick={() => setCobro(tenant)}>
-                            Registrar pago
-                          </button>
-                          <button type="button" className="min-h-10 rounded-xl border border-line px-3 text-sm" onClick={() => setRenovacion(tenant)}>
-                            Renovar fecha
-                          </button>
-                          <button
-                            type="button"
-                            disabled={ocupadoId === tenant.id}
-                            className="min-h-10 rounded-xl border border-line px-3 text-sm disabled:opacity-50"
-                            onClick={() => void alternarAcceso(tenant)}
-                          >
-                            {tenant.estado === 'Activo' ? 'Desactivar' : 'Activar'}
-                          </button>
-                          <button type="button" className="min-h-10 rounded-xl border border-line px-3 text-sm" onClick={() => setEdicion(tenant)}>
-                            Editar datos
-                          </button>
-                          <button type="button" className="min-h-10 rounded-xl border border-line px-3 text-sm" onClick={() => setSucursalNueva(tenant)}>
-                            Agregar sucursal
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="space-y-3">
+            {arbol.map((nodo) => (
+              <BarraSucursal
+                key={nodo.tenant.id}
+                nodo={nodo}
+                abiertas={abiertas}
+                ocupadoId={ocupadoId}
+                onAlternar={(id) => setAbiertas((actual) => ({ ...actual, [id]: !actual[id] }))}
+                onCobro={setCobro}
+                onRenovacion={setRenovacion}
+                onEdicion={setEdicion}
+                onSucursal={setSucursalNueva}
+                onAcceso={(tenant) => void alternarAcceso(tenant)}
+              />
+            ))}
           </div>
         )}
       </main>
@@ -620,37 +575,25 @@ function Cobranza({
       {pendientes.length === 0 ? (
         <p className="text-muted">Todos los clientes mostrados están al corriente.</p>
       ) : (
-        <div className="overflow-x-auto rounded-3xl border border-line">
-          <table className="min-w-[720px] w-full border-collapse text-left">
-            <thead className="bg-panel text-sm text-muted">
-              <tr>
-                <th className="px-4 py-3 font-medium">Negocio</th>
-                <th className="px-4 py-3 font-medium">Vence</th>
-                <th className="px-4 py-3 font-medium">Estado</th>
-                <th className="px-4 py-3 font-medium">Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pendientes.map((tenant) => {
-                const luz = semaforo(tenant);
-                return (
-                  <tr key={tenant.id} className="border-t border-line">
-                    <td className="px-4 py-3 font-medium">{tenant.nombreComercial}</td>
-                    <td className="px-4 py-3">{fecha.format(new Date(tenant.fechaVencimiento))}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex rounded-full px-3 py-1 text-sm ${COLOR[luz]}`}>{ETIQUETA[luz]}</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <button type="button" className="min-h-10 rounded-xl bg-amber px-3 text-sm font-semibold text-ink" onClick={() => onCobrar(tenant)}>
-                        Registrar pago
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <ul className="space-y-2">
+          {pendientes.map((tenant) => {
+            const luz = semaforo(tenant);
+            return (
+              <li key={tenant.id} className="flex flex-col gap-3 rounded-2xl border border-line p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{tenant.nombreComercial}</p>
+                  <p className="text-sm text-muted">Vence {fecha.format(new Date(tenant.fechaVencimiento))}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`inline-flex rounded-full px-3 py-1 text-sm ${COLOR[luz]}`}>{ETIQUETA[luz]}</span>
+                  <button type="button" className="min-h-11 rounded-xl bg-amber px-3 text-sm font-semibold text-ink" onClick={() => onCobrar(tenant)}>
+                    Registrar pago
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
       <div>
         <h2 className="text-xl font-semibold">Pagos anotados</h2>
@@ -831,6 +774,195 @@ function LogoCampo({ id, valor, onChange }: { id: string; valor: string; onChang
       </div>
     </div>
   );
+}
+
+interface NodoSucursal {
+  tenant: TenantAdmin;
+  hijos: NodoSucursal[];
+}
+
+function arbolSucursales(tenants: TenantAdmin[]): NodoSucursal[] {
+  const ids = new Set(tenants.map((tenant) => tenant.id));
+  const hijos = new Map<string, TenantAdmin[]>();
+  const raices: TenantAdmin[] = [];
+  for (const tenant of tenants) {
+    if (tenant.parentSucursalId && ids.has(tenant.parentSucursalId)) {
+      const lista = hijos.get(tenant.parentSucursalId) ?? [];
+      lista.push(tenant);
+      hijos.set(tenant.parentSucursalId, lista);
+    } else {
+      raices.push(tenant);
+    }
+  }
+  const nodo = (tenant: TenantAdmin): NodoSucursal => ({ tenant, hijos: (hijos.get(tenant.id) ?? []).map(nodo) });
+  return raices.map(nodo);
+}
+
+function BarraSucursal({
+  nodo,
+  abiertas,
+  ocupadoId,
+  onAlternar,
+  onCobro,
+  onRenovacion,
+  onEdicion,
+  onSucursal,
+  onAcceso,
+}: {
+  nodo: NodoSucursal;
+  abiertas: Record<string, boolean>;
+  ocupadoId: string | null;
+  onAlternar: (id: string) => void;
+  onCobro: (tenant: TenantAdmin) => void;
+  onRenovacion: (tenant: TenantAdmin) => void;
+  onEdicion: (tenant: TenantAdmin) => void;
+  onSucursal: (tenant: TenantAdmin) => void;
+  onAcceso: (tenant: TenantAdmin) => void;
+}) {
+  const { tenant, hijos } = nodo;
+  const abierta = abiertas[tenant.id] ?? false;
+  const luz = semaforo(tenant);
+  const relacion = tenant.parentNombre ? `Sub-sucursal de ${tenant.parentNombre}` : 'Sucursal principal';
+
+  return (
+    <article className="rounded-2xl border border-line bg-panel/40">
+      <div className="flex items-center gap-2 p-3">
+        {hijos.length > 0 ? (
+          <button
+            type="button"
+            aria-expanded={abierta}
+            aria-label={abierta ? `Cerrar sub-sucursales de ${tenant.nombreComercial}` : `Abrir sub-sucursales de ${tenant.nombreComercial}`}
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-line text-lg"
+            onClick={() => onAlternar(tenant.id)}
+          >
+            {abierta ? '▾' : '▸'}
+          </button>
+        ) : (
+          <span className="grid h-11 w-11 shrink-0 place-items-center text-muted" aria-hidden>
+            ·
+          </span>
+        )}
+        <LogoEmpresa src={tenant.logoUrl} nombre={tenant.nombreComercial} className="h-10 w-10 shrink-0" />
+        <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onAlternar(tenant.id)}>
+          <span className="block truncate font-semibold">{tenant.nombreComercial}</span>
+          <span className="block truncate text-xs text-muted">
+            {tenant.codigo || 'Sin código'}
+            {tenant.empresaNombre ? ` · ${tenant.empresaNombre}` : ''}
+          </span>
+          <span className="block truncate text-xs text-amber">
+            {relacion}
+            {hijos.length > 0 ? ` · ${hijos.length} ${hijos.length === 1 ? 'sub-sucursal' : 'sub-sucursales'}` : ''}
+          </span>
+        </button>
+        <span className={`hidden shrink-0 items-center gap-2 rounded-full px-3 py-1 text-sm sm:inline-flex ${COLOR[luz]}`}>
+          <span className="h-2.5 w-2.5 rounded-full bg-current" />
+          {ETIQUETA[luz]}
+        </span>
+      </div>
+      {abierta && (
+        <div className="border-t border-line px-3 py-3">
+          <dl className="grid grid-cols-1 gap-3 text-sm min-[420px]:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <dt className="text-muted">RFC / RUC</dt>
+              <dd className="break-all">{tenant.rucRfc}</dd>
+            </div>
+            <div>
+              <dt className="text-muted">Teléfono</dt>
+              <dd>{tenant.telefono || '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-muted">Cupo</dt>
+              <dd>
+                {tenant.cajas}/{tenant.maxCajas} cajas · {tenant.meseros}/{tenant.maxMeseros} meseros
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted">Vence</dt>
+              <dd>{fecha.format(new Date(tenant.fechaVencimiento))}</dd>
+            </div>
+          </dl>
+          <span className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm sm:hidden ${COLOR[luz]}`}>
+            <span className="h-2.5 w-2.5 rounded-full bg-current" />
+            {ETIQUETA[luz]}
+          </span>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <button type="button" className="min-h-11 rounded-xl bg-amber px-3 text-sm font-semibold text-ink" onClick={() => onCobro(tenant)}>
+              Registrar pago
+            </button>
+            <button type="button" className="min-h-11 rounded-xl border border-line px-3 text-sm" onClick={() => onRenovacion(tenant)}>
+              Renovar fecha
+            </button>
+            <button
+              type="button"
+              disabled={ocupadoId === tenant.id}
+              className="min-h-11 rounded-xl border border-line px-3 text-sm disabled:opacity-50"
+              onClick={() => onAcceso(tenant)}
+            >
+              {tenant.estado === 'Activo' ? 'Desactivar' : 'Activar'}
+            </button>
+            <button type="button" className="min-h-11 rounded-xl border border-line px-3 text-sm" onClick={() => onEdicion(tenant)}>
+              Editar datos
+            </button>
+            <button type="button" className="min-h-11 rounded-xl border border-line px-3 text-sm" onClick={() => onSucursal(tenant)}>
+              Agregar sucursal
+            </button>
+          </div>
+          {hijos.length > 0 && (
+            <div className="mt-3 space-y-2 border-l-2 border-amber/50 pl-2 sm:pl-3">
+              {hijos.map((hijo) => (
+                <BarraSucursal
+                  key={hijo.tenant.id}
+                  nodo={hijo}
+                  abiertas={abiertas}
+                  ocupadoId={ocupadoId}
+                  onAlternar={onAlternar}
+                  onCobro={onCobro}
+                  onRenovacion={onRenovacion}
+                  onEdicion={onEdicion}
+                  onSucursal={onSucursal}
+                  onAcceso={onAcceso}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </article>
+  );
+}
+
+function ordenarSucursales(tenants: TenantAdmin[]) {
+  const grupos = new Map<string, TenantAdmin[]>();
+  for (const tenant of tenants) {
+    const clave = tenant.empresaId || tenant.id;
+    const grupo = grupos.get(clave) ?? [];
+    grupo.push(tenant);
+    grupos.set(clave, grupo);
+  }
+
+  const comparar = (a: TenantAdmin, b: TenantAdmin) => a.nombreComercial.localeCompare(b.nombreComercial, 'es');
+  const ordenados = [...grupos.values()].sort((a, b) => comparar(a[0], b[0]));
+  const resultado: TenantAdmin[] = [];
+  for (const grupo of ordenados) {
+    const ids = new Set(grupo.map((tenant) => tenant.id));
+    const hijos = new Map<string, TenantAdmin[]>();
+    const raices: TenantAdmin[] = [];
+    for (const tenant of grupo) {
+      if (tenant.parentSucursalId && ids.has(tenant.parentSucursalId)) {
+        const lista = hijos.get(tenant.parentSucursalId) ?? [];
+        lista.push(tenant);
+        hijos.set(tenant.parentSucursalId, lista);
+      } else {
+        raices.push(tenant);
+      }
+    }
+    const visitar = (nodo: TenantAdmin) => {
+      resultado.push(nodo);
+      (hijos.get(nodo.id) ?? []).sort(comparar).forEach(visitar);
+    };
+    raices.sort(comparar).forEach(visitar);
+  }
+  return resultado;
 }
 
 function cupoDe(valor: string) {

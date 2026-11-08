@@ -27,10 +27,19 @@ public sealed class TenantAdminService
         var conteos = await ContarUsuariosAsync(cancellationToken);
         var marcas = await _db.Empresas.AsNoTracking().Select(e => new { e.Id, e.Nombre, e.Slug }).ToListAsync(cancellationToken);
         var empresas = marcas.ToDictionary(e => e.Id);
+        var padres = tenants.ToDictionary(t => t.Id, t => (t.NombreComercial, t.Codigo));
         return tenants.Select(tenant =>
         {
             empresas.TryGetValue(tenant.EmpresaId, out var marca);
-            return Mapear(tenant, conteos.GetValueOrDefault(tenant.Id), marca?.Nombre ?? string.Empty, marca?.Slug ?? string.Empty);
+            string? padreNombre = null;
+            string? padreCodigo = null;
+            if (tenant.ParentSucursalId is Guid padreId && padres.TryGetValue(padreId, out var padre))
+            {
+                padreNombre = padre.NombreComercial;
+                padreCodigo = padre.Codigo;
+            }
+
+            return Mapear(tenant, conteos.GetValueOrDefault(tenant.Id), marca?.Nombre ?? string.Empty, marca?.Slug ?? string.Empty, padreNombre, padreCodigo);
         }).ToList();
     }
 
@@ -355,7 +364,13 @@ public sealed class TenantAdminService
         return (marca?.Nombre ?? string.Empty, marca?.Slug ?? string.Empty);
     }
 
-    private static TenantAdminDto Mapear(Tenant tenant, Cupo cupo, string empresaNombre, string empresaSlug) => new()
+    private static TenantAdminDto Mapear(
+        Tenant tenant,
+        Cupo cupo,
+        string empresaNombre,
+        string empresaSlug,
+        string? padreNombre = null,
+        string? padreCodigo = null) => new()
     {
         Id = tenant.Id,
         NombreComercial = tenant.NombreComercial,
@@ -373,7 +388,10 @@ public sealed class TenantAdminService
         EmpresaNombre = empresaNombre ?? string.Empty,
         EmpresaSlug = empresaSlug ?? string.Empty,
         Codigo = tenant.Codigo,
-        Slug = tenant.Slug
+        Slug = tenant.Slug,
+        ParentSucursalId = tenant.ParentSucursalId,
+        ParentNombre = padreNombre,
+        ParentCodigo = padreCodigo
     };
 
     private readonly record struct Cupo(int Total, int Cajas, int Meseros);

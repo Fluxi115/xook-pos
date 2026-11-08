@@ -123,6 +123,12 @@ public sealed class TenantAdminDto
 
     public string Slug { get; set; } = string.Empty;
 
+    public Guid? ParentSucursalId { get; set; }
+
+    public string? ParentNombre { get; set; }
+
+    public string? ParentCodigo { get; set; }
+
     public string? AdminUsername { get; set; }
 }
 

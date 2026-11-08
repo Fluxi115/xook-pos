@@ -19,6 +19,7 @@ export function EmpresaPage({ onCerrarSesion }: EmpresaPageProps) {
   const [error, setError] = useState('');
   const [alta, setAlta] = useState(false);
   const [gerente, setGerente] = useState<SucursalEmpresa | null>(null);
+  const [abiertas, setAbiertas] = useState<Record<string, boolean>>({});
 
   async function cargar() {
     setError('');
@@ -50,7 +51,7 @@ export function EmpresaPage({ onCerrarSesion }: EmpresaPageProps) {
 
   return (
     <div className="min-h-dvh bg-ink text-cream">
-      <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-4">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-4">
         <div>
           <p className="text-xs font-semibold tracking-[0.16em] text-amber">{MARCA}</p>
           <h1 className="text-2xl font-semibold">{panel?.nombre ?? 'Empresa'}</h1>
@@ -70,31 +71,16 @@ export function EmpresaPage({ onCerrarSesion }: EmpresaPageProps) {
         {error && <p className="rounded-2xl border border-chili/40 bg-chili/10 p-4">{error}</p>}
         {!panel && !error && <p className="text-muted">Cargando sucursales…</p>}
         {panel && (
-          <div className="overflow-x-auto rounded-3xl border border-line">
-            <table className="min-w-[640px] w-full text-left">
-              <thead className="bg-panel text-sm text-muted">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Sucursal</th>
-                  <th className="px-4 py-3 font-medium">Código</th>
-                  <th className="px-4 py-3 font-medium">Depende de</th>
-                  <th className="px-4 py-3 font-medium">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {panel.sucursales.map((sucursal) => (
-                  <tr key={sucursal.id} className="border-t border-line">
-                    <td className="px-4 py-3 font-medium">{sucursal.nombreComercial}</td>
-                    <td className="px-4 py-3">{sucursal.codigo}</td>
-                    <td className="px-4 py-3">{sucursal.parentNombre ?? '—'}</td>
-                    <td className="px-4 py-3">
-                      <button type="button" className="min-h-10 rounded-xl border border-line px-3 text-sm" onClick={() => setGerente(sucursal)}>
-                        Crear gerente
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-3">
+            {arbolEmpresa(panel.sucursales).map((nodo) => (
+              <BarraEmpresa
+                key={nodo.sucursal.id}
+                nodo={nodo}
+                abiertas={abiertas}
+                onAlternar={(id) => setAbiertas((actual) => ({ ...actual, [id]: !actual[id] }))}
+                onGerente={setGerente}
+              />
+            ))}
           </div>
         )}
       </main>
@@ -212,5 +198,86 @@ function GerenteModal({ sucursal, onCerrar }: { sucursal: SucursalEmpresa; onCer
         </div>
       </form>
     </dialog>
+  );
+}
+
+interface NodoEmpresa {
+  sucursal: SucursalEmpresa;
+  hijos: NodoEmpresa[];
+}
+
+function arbolEmpresa(sucursales: SucursalEmpresa[]): NodoEmpresa[] {
+  const ids = new Set(sucursales.map((sucursal) => sucursal.id));
+  const hijos = new Map<string, SucursalEmpresa[]>();
+  const raices: SucursalEmpresa[] = [];
+  const comparar = (a: SucursalEmpresa, b: SucursalEmpresa) => a.nombreComercial.localeCompare(b.nombreComercial, 'es');
+  for (const sucursal of [...sucursales].sort(comparar)) {
+    if (sucursal.parentSucursalId && ids.has(sucursal.parentSucursalId)) {
+      const lista = hijos.get(sucursal.parentSucursalId) ?? [];
+      lista.push(sucursal);
+      hijos.set(sucursal.parentSucursalId, lista);
+    } else {
+      raices.push(sucursal);
+    }
+  }
+  const nodo = (sucursal: SucursalEmpresa): NodoEmpresa => ({ sucursal, hijos: (hijos.get(sucursal.id) ?? []).map(nodo) });
+  return raices.map(nodo);
+}
+
+function BarraEmpresa({
+  nodo,
+  abiertas,
+  onAlternar,
+  onGerente,
+}: {
+  nodo: NodoEmpresa;
+  abiertas: Record<string, boolean>;
+  onAlternar: (id: string) => void;
+  onGerente: (sucursal: SucursalEmpresa) => void;
+}) {
+  const { sucursal, hijos } = nodo;
+  const abierta = abiertas[sucursal.id] ?? false;
+  return (
+    <article className="rounded-2xl border border-line bg-panel/40">
+      <div className="flex items-center gap-2 p-3">
+        {hijos.length > 0 ? (
+          <button
+            type="button"
+            aria-expanded={abierta}
+            aria-label={abierta ? `Cerrar sub-sucursales de ${sucursal.nombreComercial}` : `Abrir sub-sucursales de ${sucursal.nombreComercial}`}
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-line text-lg"
+            onClick={() => onAlternar(sucursal.id)}
+          >
+            {abierta ? '▾' : '▸'}
+          </button>
+        ) : (
+          <span className="grid h-11 w-11 shrink-0 place-items-center text-muted" aria-hidden>
+            ·
+          </span>
+        )}
+        <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onAlternar(sucursal.id)}>
+          <span className="block truncate font-semibold">{sucursal.nombreComercial}</span>
+          <span className="block truncate text-xs text-muted">{sucursal.codigo}</span>
+          <span className="block truncate text-xs text-amber">
+            {sucursal.parentNombre ? `Sub-sucursal de ${sucursal.parentNombre}` : 'Sucursal principal'}
+            {hijos.length > 0 ? ` · ${hijos.length} ${hijos.length === 1 ? 'sub-sucursal' : 'sub-sucursales'}` : ''}
+          </span>
+        </button>
+      </div>
+      {abierta && (
+        <div className="border-t border-line px-3 py-3">
+          <button type="button" className="min-h-11 rounded-xl border border-line px-3 text-sm" onClick={() => onGerente(sucursal)}>
+            Crear gerente
+          </button>
+          {hijos.length > 0 && (
+            <div className="mt-3 space-y-2 border-l-2 border-amber/50 pl-2 sm:pl-3">
+              {hijos.map((hijo) => (
+                <BarraEmpresa key={hijo.sucursal.id} nodo={hijo} abiertas={abiertas} onAlternar={onAlternar} onGerente={onGerente} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </article>
   );
 }

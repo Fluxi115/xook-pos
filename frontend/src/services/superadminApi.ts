@@ -18,6 +18,9 @@ export interface TenantAdmin {
   empresaSlug: string;
   codigo: string;
   slug: string;
+  parentSucursalId?: string | null;
+  parentNombre?: string | null;
+  parentCodigo?: string | null;
   adminUsername?: string | null;
 }
 
